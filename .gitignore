@@ -1,0 +1,38 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente (nunca versionar segredos reais)
+.env
+.env.*
+!.env.example
+
+# Notas com senhas em texto puro — nunca versionar
+Senhas de acesso.txt
+*senha*.txt
+*senhas*.txt
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Cobertura de testes / cache
+coverage/
+.npm/
+
+# Build/dist (caso surjam no futuro)
+dist/
+build/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Backups e arquivos compactados acidentais
+*.zip
+*.bak

@@ -1,0 +1,8 @@
+# Normaliza terminadores de linha (texto = LF no repositório, independente do SO do dev)
+* text=auto eol=lf
+
+# Arquivos binários — não fazer diff/conversão de linha
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary

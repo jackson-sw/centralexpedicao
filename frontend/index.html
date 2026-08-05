@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#c0392b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Expedição">
+<title>Central Expedição — Burntech</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{
+  --red:#c0392b; --red-dark:#a93226; --red-light:#fff5f5; --red-soft:rgba(192,57,43,.1);
+  --bg:#f0f2f5; --text:#1a1d23; --text2:#374151; --muted:#6b7280; --muted2:#9ca3af;
+  --border:#e3e5ea; --border2:#d1d5db; --green:#16a34a;
+  --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overscroll-behavior-y:none;}
+::-webkit-scrollbar{width:5px;height:5px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+button,input,select,textarea{font-family:inherit;}
+button{-webkit-appearance:none;appearance:none;}
+
+/* ── LOGIN ─────────────────────────────────────────── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+  background:radial-gradient(circle at 15% 10%,#fff 0%,var(--bg) 45%), radial-gradient(circle at 90% 90%,rgba(192,57,43,.06) 0%,transparent 55%);}
+.login-card{background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(20,20,30,.10),0 2px 8px rgba(20,20,30,.05);padding:36px 32px;width:420px;max-width:100%;}
+.login-logo{display:flex;align-items:center;gap:11px;margin-bottom:26px;}
+.login-logo-mark{width:40px;height:40px;background:linear-gradient(145deg,var(--red),var(--red-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(192,57,43,.35);flex-shrink:0;}
+.login-logo-mark svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.2;}
+.login-logo-text{font-size:15px;font-weight:800;color:var(--text);letter-spacing:.3px;}
+.login-logo-text span{color:var(--red);}
+.login-title{font-size:22px;font-weight:800;margin-bottom:4px;letter-spacing:-.2px;}
+.login-sub{font-size:13.5px;color:var(--muted);margin-bottom:26px;}
+.login-lbl{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px;}
+.login-err{font-size:12.5px;color:#e74c3c;min-height:18px;margin-bottom:4px;font-weight:500;}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;}
+.perfil{padding:18px 12px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:center;transition:all .18s;user-select:none;background:#fff;}
+.perfil:hover{border-color:var(--red);background:var(--red-light);transform:translateY(-1px);}
+.perfil.on{border-color:var(--red);background:var(--red-light);box-shadow:0 0 0 3px var(--red-soft);}
+.picon{font-size:26px;margin-bottom:8px;}
+.plabel{font-size:13px;font-weight:700;color:var(--text);}
+.psub{font-size:11px;color:var(--muted2);margin-top:2px;}
+.pin-wrap{margin-bottom:6px;position:relative;}
+.pin-inp{width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;color:var(--text);outline:none;transition:border-color .15s;}
+.pin-inp:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+.btn-login{width:100%;padding:14px;background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:18px;transition:filter .15s,transform .1s;box-shadow:0 6px 18px rgba(192,57,43,.3);}
+.btn-login:hover{filter:brightness(1.06);}
+.btn-login:active{transform:scale(.98);}
+.btn-login:disabled{background:#e5a7a0;box-shadow:none;cursor:not-allowed;}
+.login-foot{text-align:center;margin-top:22px;font-size:11.5px;color:var(--muted2);}
+
+/* ── APP SHELL ─────────────────────────────────────── */
+.app{display:none;min-height:100vh;flex-direction:column;}
+.app.show{display:flex;}
+header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + var(--safe-top)) 20px 10px;flex-shrink:0;position:sticky;top:0;z-index:30;gap:10px;}
+.hlogo{display:flex;align-items:center;gap:9px;min-width:0;}
+.hlogo-mark{width:30px;height:30px;background:linear-gradient(145deg,var(--red),var(--red-dark));border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.hlogo-mark svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2.5;}
+.hlogo-text{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hlogo-text span{color:var(--red);}
+.hlogo-sub{font-size:10.5px;color:var(--muted);margin-top:1px;}
+.hright{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.hrole{font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;white-space:nowrap;}
+.r-exp{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
+.r-campo{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;}
+.btn-sair{background:none;border:1px solid var(--border);border-radius:7px;padding:6px 13px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
+.btn-sair:hover{border-color:var(--red);color:var(--red);}
+.wrap{max-width:900px;margin:0 auto;padding:18px 16px calc(90px + var(--safe-bottom));flex:1;width:100%;}
+
+/* ── STAT PILLS ────────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.stat-num{font-size:22px;font-weight:800;color:var(--text);line-height:1.1;}
+.stat-lbl{font-size:11.5px;color:var(--muted);margin-top:3px;font-weight:600;}
+.stat-card.accent .stat-num{color:var(--red);}
+
+/* ── SUMMARY / LIST ────────────────────────────────── */
+.summary{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+.ptitle{font-size:17px;font-weight:800;letter-spacing:-.2px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:9px;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-red{background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;box-shadow:0 4px 12px rgba(192,57,43,.28);}
+.btn-red:hover{filter:brightness(1.05);}
+.btn-red:active{transform:scale(.97);}
+.btn-out{background:#fff;color:var(--text2);border:1px solid var(--border2);}
+.btn-out:hover{background:#f9fafb;}
+.btn-grn{background:var(--green);color:#fff;}
+.btn-sm{padding:6px 11px;font-size:12px;}
+.btn-icon{width:34px;height:34px;padding:0;justify-content:center;border-radius:9px;}
+
+.ccard{background:#fff;border:1px solid var(--border);border-radius:13px;padding:16px 18px;margin-bottom:11px;border-left:4px solid var(--red);cursor:pointer;transition:all .15s;}
+.ccard:hover{box-shadow:0 6px 18px rgba(20,20,30,.07);transform:translateY(-1px);}
+.ccard.descarregamento{border-left-color:#3b82f6;}
+.cc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:9px;}
+.cc-proj{font-size:15px;font-weight:800;font-family:monospace;letter-spacing:.2px;}
+.cc-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.cc-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f3e8ff;color:#7c3aed;white-space:nowrap;flex-shrink:0;}
+.cf{display:flex;gap:6px;margin-bottom:5px;font-size:13px;align-items:baseline;}
+.cf-l{color:var(--muted2);min-width:92px;flex-shrink:0;font-size:12px;}
+.cf-v{color:var(--text);font-weight:600;}
+.cc-foot{display:flex;align-items:center;justify-content:space-between;padding-top:10px;margin-top:8px;border-top:1px solid #f0f1f3;}
+.cc-time{font-size:11.5px;color:var(--muted2);}
+.cc-itens-count{font-size:11.5px;font-weight:700;color:var(--red);}
+
+.empty-box{background:#fff;border:1.5px dashed var(--border2);border-radius:16px;padding:56px 24px;text-align:center;}
+.empty-icon{font-size:42px;margin-bottom:12px;}
+.empty-title{font-size:15px;font-weight:700;color:var(--text2);margin-bottom:4px;}
+.empty-sub{font-size:13px;color:var(--muted2);}
+.loading{text-align:center;padding:40px;color:var(--muted2);font-size:13px;}
+.spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── FAB (novo carregamento — mobile) ─────────────── */
+.fab{position:fixed;right:20px;bottom:calc(24px + var(--safe-bottom));width:58px;height:58px;border-radius:50%;
+  background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;border:none;font-size:28px;font-weight:400;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(192,57,43,.4);cursor:pointer;z-index:40;transition:transform .15s;}
+.fab:active{transform:scale(.92);}
+.fab-label{display:none;}
+
+/* ── PLACEHOLDER (Em Campo) ────────────────────────── */
+.placeholder-wrap{min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}
+.ph-icon{font-size:56px;margin-bottom:18px;}
+.ph-title{font-size:19px;font-weight:800;margin-bottom:8px;}
+.ph-sub{font-size:13.5px;color:var(--muted);max-width:320px;line-height:1.6;}
+
+/* ── MODAL ─────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(15,15,20,.5);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.overlay.open{display:flex;}
+.modal{background:#fff;border-radius:16px;width:560px;max-width:94vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.22);display:flex;flex-direction:column;}
+.mh{padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;position:sticky;top:0;background:#fff;z-index:2;border-radius:16px 16px 0 0;}
+.mt{font-size:16px;font-weight:800;} .ms{font-size:12px;color:var(--muted);margin-top:2px;}
+.mx{background:#f3f4f6;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1;padding:0;width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.mb{padding:20px 22px;overflow-y:auto;}
+.mf{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px;flex-shrink:0;position:sticky;bottom:0;background:#fff;border-radius:0 0 16px 16px;}
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+.fg label{font-size:12.5px;font-weight:700;color:var(--text2);}
+input,select,textarea{background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:11px 13px;font-family:inherit;font-size:14px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* ── LISTA DE MATERIAIS ────────────────────────────── */
+.mat-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.mat-head label{font-size:12.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
+.btn-add-round{background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1;box-shadow:0 3px 10px rgba(192,57,43,.3);}
+.mat-row{background:#f8f9fb;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;position:relative;}
+.mat-row-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.mat-row-num{font-size:11px;font-weight:800;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;}
+.mat-remove{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;line-height:1;padding:2px;}
+.mat-remove:hover{color:#e74c3c;}
+.mat-cod-row{display:flex;gap:8px;}
+.mat-cod-row input{flex:1;}
+.btn-cam{background:var(--text);color:#fff;border:none;border-radius:9px;width:44px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;transition:background .15s;}
+.btn-cam:hover{background:#000;}
+.mat-fr{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px;}
+.mat-cod-ok{font-size:11px;color:var(--green);font-weight:700;margin-top:5px;display:none;align-items:center;gap:4px;}
+.mat-cod-ok.show{display:flex;}
+
+/* ── SCANNER ───────────────────────────────────────── */
+.scanner-modal{background:#000;border-radius:16px;width:420px;max-width:94vw;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4);}
+.scanner-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;color:#fff;}
+.scanner-head .mt{color:#fff;font-size:14px;}
+.scanner-head .mx{background:rgba(255,255,255,.15);color:#fff;}
+#scanner-viewport{width:100%;min-height:280px;background:#111;}
+.scanner-hint{padding:12px 18px 18px;color:#d1d5db;font-size:12.5px;text-align:center;}
+.scanner-fallback{padding:0 18px 18px;}
+
+/* ── TOAST ─────────────────────────────────────────── */
+.toast{position:fixed;bottom:calc(20px + var(--safe-bottom));left:50%;transform:translate(-50%,50px);background:var(--text);color:#fff;border-radius:10px;padding:12px 20px;font-size:13.5px;font-weight:500;z-index:200;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+.toast.show{transform:translate(-50%,0);opacity:1;}
+.toast.err{background:#7f1d1d;}
+.toast-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);margin-right:7px;}
+
+/* ── RESPONSIVO / MOBILE ───────────────────────────── */
+@media (max-width:640px){
+  .login-card{padding:30px 22px;border-radius:16px;}
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .overlay{align-items:flex-end;}
+  .modal{width:100%;max-width:100%;height:92vh;max-height:92vh;border-radius:20px 20px 0 0;}
+  .mh{border-radius:20px 20px 0 0;}
+  .mf{border-radius:0;flex-direction:column-reverse;}
+  .mf .btn{width:100%;justify-content:center;padding:13px;}
+  .fr2{grid-template-columns:1fr;}
+  .mat-fr{grid-template-columns:1fr 1fr;}
+  header{padding:calc(10px + var(--safe-top)) 14px 10px;}
+  .wrap{padding:14px 12px calc(90px + var(--safe-bottom));}
+  .scanner-modal{width:100%;height:100%;max-width:100%;border-radius:0;display:flex;flex-direction:column;}
+  #scanner-viewport{flex:1;min-height:0;}
+}
+</style>
+</head>
+<body>
+
+<datalist id="cidades-br">
+  <option value="Agrolândia - SC"><option value="Ituporanga - SC"><option value="Rio do Sul - SC">
+  <option value="Ibirama - SC"><option value="Timbó - SC"><option value="Florianópolis - SC">
+  <option value="Joinville - SC"><option value="Blumenau - SC"><option value="Chapecó - SC">
+  <option value="Itajaí - SC"><option value="Lages - SC"><option value="Criciúma - SC">
+  <option value="Curitiba - PR"><option value="Londrina - PR"><option value="Maringá - PR">
+  <option value="Porto Alegre - RS"><option value="Caxias do Sul - RS"><option value="São Paulo - SP">
+  <option value="Campinas - SP"><option value="Ribeirão Preto - SP"><option value="Santos - SP">
+  <option value="Rio de Janeiro - RJ"><option value="Belo Horizonte - MG"><option value="Brasília - DF">
+  <option value="Goiânia - GO"><option value="Salvador - BA">
+</datalist>
+
+<!-- LOGIN -->
+<div id="login-page" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      </div>
+      <div class="login-logo-text">BURN<span>TECH</span> CALDEIRAS</div>
+    </div>
+    <div class="login-title">Central Expedição</div>
+    <div class="login-sub">Selecione seu perfil para continuar.</div>
+
+    <label class="login-lbl">Perfil de acesso</label>
+    <div class="pgrid">
+      <div class="perfil" id="p-expedicao" onclick="selPerfil('expedicao')">
+        <div class="picon">📦</div>
+        <div class="plabel">Expedição</div>
+        <div class="psub">Controle de carga</div>
+      </div>
+      <div class="perfil" id="p-em_campo" onclick="selPerfil('em_campo')">
+        <div class="picon">🚚</div>
+        <div class="plabel">Em Campo</div>
+        <div class="psub">Acesso restrito</div>
+      </div>
+    </div>
+
+    <div id="auth-pin" style="display:none;">
+      <label class="login-lbl">Senha</label>
+      <div class="pin-wrap">
+        <input type="password" class="pin-inp" id="pin" placeholder="Digite sua senha" maxlength="30" onkeydown="if(event.key==='Enter')entrar()">
+      </div>
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-login" id="btn-entrar" onclick="entrar()">Entrar no sistema</button>
+    <div class="login-foot">Burntech Caldeiras · Agrolândia, SC</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <header>
+    <div class="hlogo">
+      <div class="hlogo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      </div>
+      <div>
+        <div class="hlogo-text">BURN<span>TECH</span> — Expedição</div>
+      </div>
+    </div>
+    <div class="hright">
+      <span class="hrole" id="h-role"></span>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <!-- VIEW EXPEDIÇÃO -->
+  <div id="view-expedicao" style="display:none">
+    <div class="wrap">
+      <div class="stats-row">
+        <div class="stat-card accent">
+          <div class="stat-num" id="stat-hoje">0</div>
+          <div class="stat-lbl">Carregamentos hoje</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-total">0</div>
+          <div class="stat-lbl">Total registrado</div>
+        </div>
+      </div>
+
+      <div class="summary">
+        <span class="ptitle">Histórico de Carregamentos</span>
+        <button class="btn btn-red" id="btn-novo-desktop" onclick="abrirNovoCarregamento()">+ Novo Carregamento</button>
+      </div>
+
+      <div id="lista-carregamentos"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+    <button class="fab" id="fab-novo" onclick="abrirNovoCarregamento()" title="Novo Carregamento" aria-label="Novo Carregamento">+</button>
+  </div>
+
+  <!-- VIEW EM CAMPO (placeholder) -->
+  <div id="view-em-campo" style="display:none">
+    <div class="placeholder-wrap">
+      <div>
+        <div class="ph-icon">🚧</div>
+        <div class="ph-title">Funcionalidades em breve</div>
+        <div class="ph-sub">O perfil <strong>Em Campo</strong> ainda está em desenvolvimento. Novas funções serão liberadas aqui em breve.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NOVO CARREGAMENTO -->
+<div class="overlay" id="mo-novo">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <div class="mt">📦 Novo Carregamento</div>
+        <div class="ms">Preencha os dados e a lista de materiais</div>
+      </div>
+      <button class="mx" onclick="fecharModal('mo-novo')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg"><label>Nome do responsável *</label><input id="nc-responsavel" placeholder="Ex: João da Silva"></div>
+      <div class="fr2">
+        <div class="fg"><label>Nº do Projeto *</label><input id="nc-projeto" placeholder="Ex: PRJ-0142"></div>
+        <div class="fg"><label>Cidade de destino *</label><input id="nc-cidade" list="cidades-br" placeholder="Ex: Rio do Sul - SC"></div>
+      </div>
+
+      <div class="mat-head">
+        <label>Lista de materiais *</label>
+        <button type="button" class="btn-add-round" onclick="addItemRow()" title="Adicionar item">+</button>
+      </div>
+      <div id="mat-list"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal('mo-novo')">Cancelar</button>
+      <button class="btn btn-red" id="btn-salvar-carregamento" onclick="salvarCarregamento()">Salvar Carregamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALHE DO CARREGAMENTO -->
+<div class="overlay" id="mo-detalhe">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <div class="mt" id="det-titulo">Carregamento</div>
+        <div class="ms" id="det-sub"></div>
+      </div>
+      <button class="mx" onclick="fecharModal('mo-detalhe')">×</button>
+    </div>
+    <div class="mb" id="det-body"></div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SCANNER DE CÓDIGO DE BARRAS -->
+<div class="overlay" id="mo-scanner">
+  <div class="scanner-modal">
+    <div class="scanner-head">
+      <div><div class="mt">📷 Escanear código de barras</div></div>
+      <button class="mx" onclick="fecharScanner()">×</button>
+    </div>
+    <div id="scanner-viewport"></div>
+    <div class="scanner-hint">Aponte a câmera para o código de barras do item.</div>
+    <div class="scanner-fallback">
+      <button class="btn btn-out" style="width:100%;justify-content:center" onclick="fecharScanner()">Digitar manualmente</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+let TOKEN  = localStorage.getItem('exp_token')  || null;
+let PERFIL = localStorage.getItem('exp_perfil') || null;
+let NOME   = localStorage.getItem('exp_nome')   || null;
+let SELECTED_PERFIL = null;
+let itensAtuais = [];
+let scannerAtivo = null;
+let scannerRowIdx = null;
+let pollTimer = null;
+let carregamentosCache = [];
+
+// ── HELPER API ────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const resp = await fetch(API + path, opts);
+  let data = null;
+  try { data = await resp.json(); } catch {}
+  if (!resp.ok) throw new Error((data && data.erro) || 'Erro na requisição.');
+  return data;
+}
+
+// ── LOGIN ─────────────────────────────────────────────
+function selPerfil(p) {
+  SELECTED_PERFIL = p;
+  document.getElementById('p-expedicao').classList.toggle('on', p === 'expedicao');
+  document.getElementById('p-em_campo').classList.toggle('on', p === 'em_campo');
+  document.getElementById('auth-pin').style.display = 'block';
+  document.getElementById('login-err').textContent = '';
+  document.getElementById('pin').value = '';
+  document.getElementById('pin').focus();
+}
+
+async function entrar() {
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  if (!SELECTED_PERFIL) { err.textContent = 'Selecione um perfil.'; return; }
+  const senha = document.getElementById('pin').value;
+  if (!senha) { err.textContent = 'Digite a senha.'; return; }
+
+  const btn = document.getElementById('btn-entrar');
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  try {
+    const data = await api('POST', '/auth/login', { perfil: SELECTED_PERFIL, senha });
+    TOKEN = data.token; PERFIL = data.perfil; NOME = data.nome;
+    localStorage.setItem('exp_token', TOKEN);
+    localStorage.setItem('exp_perfil', PERFIL);
+    localStorage.setItem('exp_nome', NOME);
+    boot();
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar no sistema';
+  }
+}
+
+function sair() {
+  localStorage.removeItem('exp_token');
+  localStorage.removeItem('exp_perfil');
+  localStorage.removeItem('exp_nome');
+  clearInterval(pollTimer);
+  location.reload();
+}
+
+// ── BOOT ──────────────────────────────────────────────
+function boot() {
+  if (!TOKEN || !PERFIL) return;
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').classList.add('show');
+
+  const roleEl = document.getElementById('h-role');
+  if (PERFIL === 'expedicao') {
+    roleEl.textContent = 'Expedição';
+    roleEl.className = 'hrole r-exp';
+    document.getElementById('view-expedicao').style.display = 'block';
+    carregarHistorico();
+    pollTimer = setInterval(carregarHistorico, 25000);
+  } else {
+    roleEl.textContent = 'Em Campo';
+    roleEl.className = 'hrole r-campo';
+    document.getElementById('view-em-campo').style.display = 'block';
+  }
+}
+
+// ── HISTÓRICO ─────────────────────────────────────────
+async function carregarHistorico() {
+  try {
+    const lista = await api('GET', '/carregamentos');
+    carregamentosCache = lista;
+    renderStats(lista);
+    renderLista(lista);
+  } catch (e) {
+    if (!carregamentosCache.length) {
+      document.getElementById('lista-carregamentos').innerHTML =
+        `<div class="empty-box"><div class="empty-icon">⚠️</div><div class="empty-title">Não foi possível carregar</div><div class="empty-sub">${e.message}</div></div>`;
+    }
+  }
+}
+
+function renderStats(lista) {
+  const hoje = new Date().toDateString();
+  const doDia = lista.filter(c => new Date(c.criado_em).toDateString() === hoje).length;
+  document.getElementById('stat-hoje').textContent = doDia;
+  document.getElementById('stat-total').textContent = lista.length;
+}
+
+function renderLista(lista) {
+  const el = document.getElementById('lista-carregamentos');
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-box"><div class="empty-icon">📭</div><div class="empty-title">Nenhum carregamento registrado</div><div class="empty-sub">Toque em "Novo Carregamento" para começar.</div></div>`;
+    return;
+  }
+  el.innerHTML = lista.map(c => `
+    <div class="ccard ${c.tipo}" onclick="verDetalhe(${c.id})">
+      <div class="cc-top">
+        <div>
+          <div class="cc-proj">#${c.numero_projeto}</div>
+          <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
+        </div>
+        <span class="cc-badge">${c.tipo === 'carregamento' ? 'Carregamento' : 'Descarregamento'}</span>
+      </div>
+      <div class="cf"><span class="cf-l">Destino</span><span class="cf-v">${escapeHtml(c.cidade_destino)}</span></div>
+      <div class="cc-foot">
+        <span class="cc-time">${fmtDT(c.criado_em)}</span>
+        <span class="cc-itens-count">${c.total_itens} ${c.total_itens == 1 ? 'item' : 'itens'}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function verDetalhe(id) {
+  try {
+    const c = await api('GET', '/carregamentos/' + id);
+    document.getElementById('det-titulo').textContent = '#' + c.numero_projeto + ' — ' + c.cidade_destino;
+    document.getElementById('det-sub').textContent = c.responsavel_nome + ' · ' + fmtDT(c.criado_em);
+    document.getElementById('det-body').innerHTML = `
+      <div class="fg"><label>Itens (${c.itens.length})</label></div>
+      ${c.itens.map(i => `
+        <div class="mat-row" style="cursor:default">
+          <div class="mat-row-top">
+            <span class="mat-row-num" style="font-family:monospace;color:var(--text);font-size:12.5px">${escapeHtml(i.codigo_item)}</span>
+            <span class="cc-itens-count">${i.quantidade}x</span>
+          </div>
+          <div class="cf-v" style="font-size:13px">${escapeHtml(i.descricao)}</div>
+        </div>
+      `).join('')}
+    `;
+    abrirModal('mo-detalhe');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── NOVO CARREGAMENTO ─────────────────────────────────
+function abrirNovoCarregamento() {
+  document.getElementById('nc-responsavel').value = '';
+  document.getElementById('nc-projeto').value = '';
+  document.getElementById('nc-cidade').value = '';
+  itensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
+  renderItens();
+  abrirModal('mo-novo');
+}
+
+function renderItens() {
+  const el = document.getElementById('mat-list');
+  el.innerHTML = itensAtuais.map((it, idx) => `
+    <div class="mat-row">
+      <div class="mat-row-top">
+        <span class="mat-row-num">Item ${idx + 1}</span>
+        ${itensAtuais.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemRow(${idx})" title="Remover item">×</button>` : ''}
+      </div>
+      <div class="fg" style="margin-bottom:8px">
+        <label>Código do item *</label>
+        <div class="mat-cod-row">
+          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItem(${idx},'codigo_item',this.value)">
+          <button type="button" class="btn-cam" onclick="abrirScanner(${idx})" title="Escanear código de barras">📷</button>
+        </div>
+      </div>
+      <div class="mat-fr">
+        <div class="fg" style="margin-bottom:0">
+          <label>Descrição *</label>
+          <input placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItem(${idx},'descricao',this.value)">
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label>Quantidade *</label>
+          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItem(${idx},'quantidade',this.value)">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function atualizaItem(idx, campo, valor) {
+  itensAtuais[idx][campo] = campo === 'quantidade' ? valor : valor;
+}
+
+function addItemRow() {
+  itensAtuais.push({ codigo_item: '', descricao: '', quantidade: 1 });
+  renderItens();
+}
+
+function removeItemRow(idx) {
+  itensAtuais.splice(idx, 1);
+  renderItens();
+}
+
+async function salvarCarregamento() {
+  const responsavel_nome = document.getElementById('nc-responsavel').value.trim();
+  const numero_projeto   = document.getElementById('nc-projeto').value.trim();
+  const cidade_destino   = document.getElementById('nc-cidade').value.trim();
+
+  if (!responsavel_nome || !numero_projeto || !cidade_destino) {
+    toast('Preencha responsável, projeto e cidade de destino.', true); return;
+  }
+  const itens = itensAtuais
+    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0 }))
+    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
+
+  if (!itens.length) { toast('Inclua ao menos um item válido na lista de materiais.', true); return; }
+
+  const btn = document.getElementById('btn-salvar-carregamento');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, cidade_destino, itens });
+    toast('Carregamento registrado com sucesso.');
+    fecharModal('mo-novo');
+    carregarHistorico();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar Carregamento';
+  }
+}
+
+// ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
+async function abrirScanner(idx) {
+  scannerRowIdx = idx;
+  abrirModal('mo-scanner');
+  try {
+    scannerAtivo = new Html5Qrcode('scanner-viewport');
+    const formatsSupported = [
+      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE,
+    ];
+    await scannerAtivo.start(
+      { facingMode: 'environment' },
+      { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
+      (decodedText) => {
+        atualizaItem(scannerRowIdx, 'codigo_item', decodedText);
+        renderItens();
+        toast('Código lido: ' + decodedText);
+        fecharScanner();
+      },
+      () => {}
+    );
+  } catch (e) {
+    toast('Não foi possível acessar a câmera. Digite o código manualmente.', true);
+    fecharScanner();
+  }
+}
+
+async function fecharScanner() {
+  if (scannerAtivo) {
+    try { await scannerAtivo.stop(); scannerAtivo.clear(); } catch {}
+    scannerAtivo = null;
+  }
+  fecharModal('mo-scanner');
+}
+
+// ── MODAL HELPERS ─────────────────────────────────────
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── AUTOCOMPLETE DE CIDADES (Cidade de destino) ───────
+// Carrega todos os municípios do Brasil via API do IBGE e preenche o
+// <datalist id="cidades-br"> dinamicamente. Mantém cache em localStorage
+// por alguns dias para não rebaixar ~5.500 registros em todo carregamento.
+// Se a API estiver indisponível (ex: VPS sem saída p/ internet), mantém a
+// lista estática reduzida que já vem no HTML como fallback.
+const CIDADES_CACHE_KEY  = 'cidadesBR_v1';
+const CIDADES_CACHE_DIAS = 30;
+
+async function carregarCidadesBR() {
+  try {
+    const cache    = JSON.parse(localStorage.getItem(CIDADES_CACHE_KEY) || 'null');
+    const validade = 1000 * 60 * 60 * 24 * CIDADES_CACHE_DIAS;
+    if (cache?.lista?.length && (Date.now() - cache.em) < validade) {
+      preencherCidadesDatalist(cache.lista);
+      return;
+    }
+    const res  = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome');
+    const data = await res.json();
+    // Alguns municípios vêm com "microrregiao": null (IBGE está descontinuando essa
+    // divisão). Nesses casos, cai para "regiao-imediata", que sempre vem preenchida.
+    const lista = data
+      .map(m => {
+        const uf = m.microrregiao?.mesorregiao?.UF?.sigla
+                ?? m['regiao-imediata']?.['regiao-intermediaria']?.UF?.sigla;
+        return uf ? `${m.nome} - ${uf}` : null;
+      })
+      .filter(Boolean);
+    localStorage.setItem(CIDADES_CACHE_KEY, JSON.stringify({ em: Date.now(), lista }));
+    preencherCidadesDatalist(lista);
+  } catch (e) {
+    console.warn('Não foi possível carregar a lista completa de cidades (IBGE). Mantendo lista reduzida.', e);
+  }
+}
+
+function preencherCidadesDatalist(lista) {
+  const dl = document.getElementById('cidades-br');
+  if (!dl) return;
+  dl.innerHTML = lista.map(c => `<option value="${c}">`).join('');
+}
+
+// ── UTIL ──────────────────────────────────────────────
+function fmtDT(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+let toastTimer = null;
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.innerHTML = (isErr ? '' : '<span class="toast-dot"></span>') + escapeHtml(msg);
+  el.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ── PWA: SERVICE WORKER ────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────
+if (TOKEN && PERFIL) boot();
+carregarCidadesBR();
+</script>
+</body>
+</html>

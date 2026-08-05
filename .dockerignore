@@ -1,0 +1,11 @@
+**/node_modules
+**/.git
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/*.zip
+**/*.bak
+.vscode
+.idea
+README.md
