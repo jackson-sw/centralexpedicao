@@ -23,4 +23,13 @@ function apenasExpedicao(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao };
+// Bloqueio: só o perfil Admin (painel /admin) pode gerenciar o
+// catálogo de itens/materiais.
+function apenasAdmin(req, res, next) {
+  if (req.usuario?.perfil !== 'admin') {
+    return res.status(403).json({ erro: 'Acesso restrito ao painel administrativo.' });
+  }
+  next();
+}
+
+module.exports = { auth, apenasExpedicao, apenasAdmin };

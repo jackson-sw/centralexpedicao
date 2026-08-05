@@ -4,9 +4,10 @@ const cors      = require('cors');
 const rateLimit = require('express-rate-limit');
 const path      = require('path');
 
-const authRoutes          = require('./routes/auth');
-const carregamentosRoutes = require('./routes/carregamentos');
-const caixasRoutes        = require('./routes/caixas');
+const authRoutes           = require('./routes/auth');
+const carregamentosRoutes  = require('./routes/carregamentos');
+const caixasRoutes         = require('./routes/caixas');
+const itensMateriaisRoutes = require('./routes/itensMateriais');
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
@@ -31,12 +32,16 @@ app.use('/api/auth', rateLimit({
 }));
 
 // ── Rotas da API ──────────────────────────────────────────────
-app.use('/api/auth',          authRoutes);
-app.use('/api/carregamentos', carregamentosRoutes);
-app.use('/api/caixas',        caixasRoutes);
+app.use('/api/auth',           authRoutes);
+app.use('/api/carregamentos',  carregamentosRoutes);
+app.use('/api/caixas',         caixasRoutes);
+app.use('/api/itens-materiais', itensMateriaisRoutes);
 
 // ── Serve o frontend estático em produção ─────────────────────
 app.use(express.static(path.join(__dirname, '../frontend')));
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/admin.html'));
+});
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });

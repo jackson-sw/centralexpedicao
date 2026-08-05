@@ -151,8 +151,25 @@ LEFT JOIN carregamento_itens ci ON ci.carregamento_id = c.id
 GROUP BY c.id;
 
 -- ------------------------------------------------------------
--- Dados iniciais: nenhum. Os perfis de acesso (Expedição / Em Campo)
--- são autenticados por senha fixa via hash bcrypt em backend/.env
--- (EXPEDICAO_PASSWORD_HASH / EM_CAMPO_PASSWORD_HASH), não há tabela
--- de usuários — mesmo modelo do perfil "central" no Central Logística.
+-- Tabela: itens_materiais
+-- Catálogo mestre de materiais, mantido pelo painel administrativo
+-- (/admin). Apenas código (único) e descrição.
+-- ------------------------------------------------------------
+CREATE TABLE itens_materiais (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  codigo        VARCHAR(100) NOT NULL,
+  descricao     VARCHAR(255) NOT NULL,
+  criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_itens_materiais_codigo (codigo),
+  KEY idx_itens_materiais_descricao (descricao)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Dados iniciais: nenhum. Os perfis de acesso (Expedição / Em Campo /
+-- Admin) são autenticados por senha fixa via hash bcrypt em
+-- backend/.env (EXPEDICAO_PASSWORD_HASH / EM_CAMPO_PASSWORD_HASH /
+-- ADMIN_PASSWORD_HASH), não há tabela de usuários — mesmo modelo do
+-- perfil "central" no Central Logística.
 -- ------------------------------------------------------------
