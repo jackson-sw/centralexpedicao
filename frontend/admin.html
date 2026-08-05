@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#c0392b">
 <title>Painel Administrativo — Central Expedição</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 :root{
   --red:#c0392b; --red-dark:#a93226; --red-light:#fff5f5; --red-soft:rgba(192,57,43,.1);
@@ -96,6 +97,19 @@ tbody tr:hover td{background:#fafbff;}
 .fg label{font-size:12.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
 .fg input{background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
 .fg input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+.cod-row{display:flex;gap:8px;}
+.cod-row input{flex:1;}
+.btn-cam{background:var(--text);color:#fff;border:none;border-radius:9px;width:44px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;transition:background .15s;}
+.btn-cam:hover{background:#000;}
+
+/* ── SCANNER ───────────────────────────────────────── */
+.scanner-modal{background:#000;border-radius:16px;width:420px;max-width:94vw;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4);}
+.scanner-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;color:#fff;}
+.scanner-head .mt{color:#fff;font-size:14px;}
+.scanner-head .mx{background:rgba(255,255,255,.15);color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;}
+#scanner-viewport{width:100%;min-height:280px;background:#111;}
+.scanner-hint{padding:12px 18px 18px;color:#d1d5db;font-size:12.5px;text-align:center;}
+.scanner-fallback{padding:0 18px 18px;}
 
 /* ── TOAST ─────────────────────────────────────────── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,50px);background:var(--text);color:#fff;border-radius:10px;padding:12px 22px;font-size:13.5px;font-weight:500;z-index:200;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);}
@@ -109,6 +123,8 @@ tbody tr:hover td{background:#fafbff;}
   th:nth-child(3),td:nth-child(3){white-space:nowrap;}
   .toolbar{flex-direction:column;align-items:stretch;}
   .toolbar .btn{width:100%;justify-content:center;}
+  .scanner-modal{width:100%;height:100%;max-width:100%;border-radius:0;display:flex;flex-direction:column;}
+  #scanner-viewport{flex:1;min-height:0;}
 }
 </style>
 </head>
@@ -181,12 +197,33 @@ tbody tr:hover td{background:#fafbff;}
       <div class="ms">Preencha código e descrição do material</div>
     </div>
     <div class="mb">
-      <div class="fg"><label>Código *</label><input id="f-codigo" placeholder="Ex: PRF-1042" onkeydown="if(event.key==='Enter')salvarItem()"></div>
+      <div class="fg">
+        <label>Código *</label>
+        <div class="cod-row">
+          <input id="f-codigo" placeholder="Ex: PRF-1042" onkeydown="if(event.key==='Enter')salvarItem()">
+          <button type="button" class="btn-cam" onclick="abrirScanner()" title="Escanear código de barras">📷</button>
+        </div>
+      </div>
       <div class="fg"><label>Descrição *</label><input id="f-descricao" placeholder="Ex: Parafuso sextavado 1/2 pol" onkeydown="if(event.key==='Enter')salvarItem()"></div>
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharModal()">Cancelar</button>
       <button class="btn btn-red" id="btn-salvar" onclick="salvarItem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SCANNER DE CÓDIGO DE BARRAS -->
+<div class="overlay" id="mo-scanner">
+  <div class="scanner-modal">
+    <div class="scanner-head">
+      <div><div class="mt">📷 Escanear código de barras</div></div>
+      <button class="mx" onclick="fecharScanner()">×</button>
+    </div>
+    <div id="scanner-viewport"></div>
+    <div class="scanner-hint">Aponte a câmera para o código de barras do item.</div>
+    <div class="scanner-fallback">
+      <button class="btn btn-out" style="width:100%;justify-content:center" onclick="fecharScanner()">Digitar manualmente</button>
     </div>
   </div>
 </div>
@@ -203,6 +240,7 @@ let pagina = 1;
 const POR_PAGINA = 50;
 let sortCol = 'codigo';
 let sortDir = 'asc';
+let scannerAtivo = null;
 
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -382,6 +420,41 @@ async function salvarItem() {
   } finally {
     btn.disabled = false; btn.textContent = 'Salvar';
   }
+}
+
+// ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
+async function abrirScanner() {
+  document.getElementById('mo-scanner').classList.add('open');
+  try {
+    scannerAtivo = new Html5Qrcode('scanner-viewport');
+    const formatsSupported = [
+      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE,
+    ];
+    await scannerAtivo.start(
+      { facingMode: 'environment' },
+      { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
+      (decodedText) => {
+        document.getElementById('f-codigo').value = decodedText;
+        toast('Código lido: ' + decodedText);
+        fecharScanner();
+      },
+      () => {}
+    );
+  } catch (e) {
+    toast('Não foi possível acessar a câmera. Digite o código manualmente.', true);
+    fecharScanner();
+  }
+}
+
+async function fecharScanner() {
+  if (scannerAtivo) {
+    try { await scannerAtivo.stop(); scannerAtivo.clear(); } catch {}
+    scannerAtivo = null;
+  }
+  document.getElementById('mo-scanner').classList.remove('open');
 }
 
 async function excluirItem(id) {
