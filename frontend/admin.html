@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#c0392b">
+<title>Painel Administrativo — Central Expedição</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#c0392b; --red-dark:#a93226; --red-light:#fff5f5; --red-soft:rgba(192,57,43,.1);
+  --bg:#f0f2f5; --text:#1a1d23; --text2:#374151; --muted:#6b7280; --muted2:#9ca3af;
+  --border:#e3e5ea; --border2:#d1d5db; --green:#16a34a;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+button,input{font-family:inherit;}
+
+/* ── LOGIN ─────────────────────────────────────────── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+  background:radial-gradient(circle at 15% 10%,#fff 0%,var(--bg) 45%), radial-gradient(circle at 90% 90%,rgba(192,57,43,.06) 0%,transparent 55%);}
+.login-card{background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(20,20,30,.10),0 2px 8px rgba(20,20,30,.05);padding:36px 32px;width:400px;max-width:100%;}
+.login-logo{display:flex;align-items:center;gap:11px;margin-bottom:26px;}
+.login-logo-mark{width:40px;height:40px;background:linear-gradient(145deg,var(--red),var(--red-dark));border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(192,57,43,.35);flex-shrink:0;}
+.login-logo-mark svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.2;}
+.login-logo-text{font-size:15px;font-weight:800;color:var(--text);letter-spacing:.3px;}
+.login-logo-text span{color:var(--red);}
+.login-title{font-size:20px;font-weight:800;margin-bottom:4px;letter-spacing:-.2px;}
+.login-sub{font-size:13.5px;color:var(--muted);margin-bottom:22px;}
+.login-lbl{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px;}
+.login-err{font-size:12.5px;color:#e74c3c;min-height:18px;margin-bottom:4px;font-weight:500;}
+.pin-inp{width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;color:var(--text);outline:none;transition:border-color .15s;}
+.pin-inp:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+.btn-login{width:100%;padding:14px;background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px;transition:filter .15s,transform .1s;box-shadow:0 6px 18px rgba(192,57,43,.3);}
+.btn-login:hover{filter:brightness(1.06);}
+.btn-login:disabled{background:#e5a7a0;box-shadow:none;cursor:not-allowed;}
+
+/* ── APP SHELL ─────────────────────────────────────── */
+.app{display:none;min-height:100vh;flex-direction:column;}
+.app.show{display:flex;}
+header{background:#fff;border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex-shrink:0;position:sticky;top:0;z-index:10;}
+.hlogo{display:flex;align-items:center;gap:10px;}
+.hlogo-mark{width:32px;height:32px;background:linear-gradient(145deg,var(--red),var(--red-dark));border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.hlogo-mark svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;}
+.hlogo-text{font-size:14px;font-weight:800;color:var(--text);}
+.hlogo-text span{color:var(--red);}
+.hlogo-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-sair{background:none;border:1px solid var(--border);border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
+.btn-sair:hover{border-color:var(--red);color:var(--red);}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 20px;flex:1;width:100%;}
+
+/* ── FILTROS / AÇÕES ───────────────────────────────── */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;}
+.search-inp{flex:1;min-width:220px;padding:11px 14px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;color:var(--text);outline:none;background:#fff;transition:border-color .15s;}
+.search-inp:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+.count-label{font-size:12.5px;color:var(--muted);white-space:nowrap;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-red{background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;box-shadow:0 4px 12px rgba(192,57,43,.28);}
+.btn-red:hover{filter:brightness(1.05);}
+.btn-out{background:#fff;color:var(--text2);border:1px solid var(--border2);}
+.btn-out:hover{background:#f9fafb;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+
+/* ── TABELA ────────────────────────────────────────── */
+.tcard{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead{background:#f8f9fb;}
+th{font-size:11px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+th.sortable{cursor:pointer;user-select:none;}
+th.sortable:hover{color:var(--text2);}
+td{padding:13px 16px;font-size:13.5px;border-bottom:1px solid #f0f1f3;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#fafbff;}
+.td-codigo{font-family:monospace;font-weight:700;color:var(--text);}
+.empty-row{text-align:center;padding:56px 24px;color:var(--muted2);font-size:14px;}
+.acoes-cell{display:flex;gap:6px;}
+
+/* ── PAGINAÇÃO ─────────────────────────────────────── */
+.pagination{display:flex;align-items:center;justify-content:center;gap:5px;padding:16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.pagination button{padding:6px 12px;border:1.5px solid var(--border);border-radius:7px;background:#fff;cursor:pointer;font-size:13px;color:var(--text2);font-weight:600;transition:.13s;}
+.pagination button:hover:not(:disabled):not(.pg-active){background:#f3f4f6;}
+.pagination button.pg-active{background:var(--red);border-color:var(--red);color:#fff;}
+.pagination button:disabled{opacity:.35;cursor:default;}
+.pg-info{font-size:12.5px;color:var(--muted);padding:0 8px;}
+
+/* ── MODAL ─────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(15,15,20,.5);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.overlay.open{display:flex;}
+.modal{background:#fff;border-radius:16px;width:440px;max-width:94vw;box-shadow:0 24px 70px rgba(0,0,0,.22);}
+.mh{padding:22px 24px 4px;}
+.mt{font-size:17px;font-weight:800;}
+.ms{font-size:12.5px;color:var(--muted);margin-top:4px;}
+.mb{padding:18px 24px;}
+.mf{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px;}
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
+.fg label{font-size:12.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
+.fg input{background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
+.fg input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
+
+/* ── TOAST ─────────────────────────────────────────── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,50px);background:var(--text);color:#fff;border-radius:10px;padding:12px 22px;font-size:13.5px;font-weight:500;z-index:200;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+.toast.show{transform:translate(-50%,0);opacity:1;}
+.toast.err{background:#7f1d1d;}
+
+@media (max-width:640px){
+  .login-card{padding:30px 22px;}
+  header{padding:0 16px;}
+  .wrap{padding:16px 12px;}
+  th:nth-child(3),td:nth-child(3){white-space:nowrap;}
+  .toolbar{flex-direction:column;align-items:stretch;}
+  .toolbar .btn{width:100%;justify-content:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-page" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      </div>
+      <div class="login-logo-text">BURN<span>TECH</span> CALDEIRAS</div>
+    </div>
+    <div class="login-title">Painel Administrativo</div>
+    <div class="login-sub">Cadastro de itens e materiais — Central Expedição</div>
+
+    <label class="login-lbl">Senha do painel</label>
+    <input type="password" class="pin-inp" id="login-senha" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-login" id="btn-login" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <header>
+    <div class="hlogo">
+      <div class="hlogo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      </div>
+      <div>
+        <div class="hlogo-text">BURN<span>TECH</span> — Admin</div>
+        <div class="hlogo-sub">Itens e Materiais</div>
+      </div>
+    </div>
+    <button class="btn-sair" onclick="logout()">Sair</button>
+  </header>
+
+  <div class="wrap">
+    <div class="toolbar">
+      <input type="text" class="search-inp" id="busca" placeholder="🔍 Buscar por código ou descrição..." oninput="aplicarFiltro()">
+      <span class="count-label" id="count-label"></span>
+      <button class="btn btn-red" onclick="abrirNovo()">+ Novo Item</button>
+    </div>
+
+    <div class="tcard">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" id="th-codigo" onclick="sortBy('codigo')">Código ↑</th>
+            <th class="sortable" id="th-descricao" onclick="sortBy('descricao')">Descrição</th>
+            <th style="width:150px">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="3" class="empty-row">Carregando...</td></tr>
+        </tbody>
+      </table>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NOVO/EDITAR ITEM -->
+<div class="overlay" id="mo-item">
+  <div class="modal">
+    <div class="mh">
+      <div class="mt" id="mo-titulo">Novo Item</div>
+      <div class="ms">Preencha código e descrição do material</div>
+    </div>
+    <div class="mb">
+      <div class="fg"><label>Código *</label><input id="f-codigo" placeholder="Ex: PRF-1042" onkeydown="if(event.key==='Enter')salvarItem()"></div>
+      <div class="fg"><label>Descrição *</label><input id="f-descricao" placeholder="Ex: Parafuso sextavado 1/2 pol" onkeydown="if(event.key==='Enter')salvarItem()"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-red" id="btn-salvar" onclick="salvarItem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+let TOKEN = null; // não persiste em localStorage — precisa logar a cada acesso ao painel
+let itensTodos = [];
+let itensFiltrados = [];
+let editandoId = null;
+let pagina = 1;
+const POR_PAGINA = 50;
+let sortCol = 'codigo';
+let sortDir = 'asc';
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const resp = await fetch(API + path, opts);
+  let data = null;
+  try { data = await resp.json(); } catch {}
+  if (!resp.ok) throw new Error((data && data.erro) || 'Erro na requisição.');
+  return data;
+}
+
+// ── LOGIN ─────────────────────────────────────────────
+async function doLogin() {
+  const senha = document.getElementById('login-senha').value.trim();
+  const err   = document.getElementById('login-err');
+  const btn   = document.getElementById('btn-login');
+  err.textContent = '';
+  if (!senha) { err.textContent = 'Informe a senha.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  try {
+    const data = await api('POST', '/auth/admin-login', { senha });
+    TOKEN = data.token;
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    carregarItens();
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+function logout() {
+  TOKEN = null;
+  itensTodos = [];
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('login-page').style.display = '';
+  document.getElementById('login-senha').value = '';
+  document.getElementById('login-err').textContent = '';
+}
+
+// ── LISTAGEM ──────────────────────────────────────────
+async function carregarItens() {
+  try {
+    itensTodos = await api('GET', '/itens-materiais');
+    aplicarFiltro();
+  } catch (e) {
+    document.getElementById('tbody').innerHTML =
+      `<tr><td colspan="3" class="empty-row" style="color:var(--red)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function aplicarFiltro() {
+  const busca = document.getElementById('busca').value.toLowerCase().trim();
+  itensFiltrados = itensTodos.filter(i =>
+    !busca || i.codigo.toLowerCase().includes(busca) || i.descricao.toLowerCase().includes(busca)
+  );
+  pagina = 1;
+  document.getElementById('count-label').textContent =
+    itensFiltrados.length + ' ' + (itensFiltrados.length === 1 ? 'item' : 'itens');
+  renderTabela();
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = 'asc'; }
+  pagina = 1;
+  renderTabela();
+}
+
+function renderTabela() {
+  const dir = sortDir === 'asc' ? 1 : -1;
+  itensFiltrados.sort((a, b) => {
+    const va = (a[sortCol] || '').toLowerCase();
+    const vb = (b[sortCol] || '').toLowerCase();
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+
+  document.getElementById('th-codigo').textContent = 'Código' + (sortCol === 'codigo' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
+  document.getElementById('th-descricao').textContent = 'Descrição' + (sortCol === 'descricao' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
+
+  const tb = document.getElementById('tbody');
+  const ini = (pagina - 1) * POR_PAGINA;
+  const page = itensFiltrados.slice(ini, ini + POR_PAGINA);
+
+  if (!itensFiltrados.length) {
+    tb.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum item cadastrado.</td></tr>';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  tb.innerHTML = page.map(i => `
+    <tr>
+      <td class="td-codigo">${esc(i.codigo)}</td>
+      <td>${esc(i.descricao)}</td>
+      <td class="acoes-cell">
+        <button class="btn btn-out btn-sm" onclick="abrirEditar(${i.id})">Editar</button>
+        <button class="btn btn-out btn-sm" style="color:#991b1b;border-color:#fca5a5" onclick="excluirItem(${i.id})">Excluir</button>
+      </td>
+    </tr>
+  `).join('');
+
+  renderPaginacao();
+}
+
+function renderPaginacao() {
+  const total = Math.ceil(itensFiltrados.length / POR_PAGINA);
+  const pg = document.getElementById('pagination');
+  if (total <= 1) { pg.innerHTML = ''; return; }
+
+  let h = `<button onclick="irPagina(${pagina - 1})" ${pagina <= 1 ? 'disabled' : ''}>‹ Anterior</button>`;
+  for (let i = 1; i <= total; i++) {
+    if (total > 9 && i > 2 && i < total - 1 && Math.abs(i - pagina) > 2) {
+      if (i === 3 || i === total - 2) h += '<span class="pg-info">…</span>';
+      continue;
+    }
+    h += `<button class="${i === pagina ? 'pg-active' : ''}" onclick="irPagina(${i})">${i}</button>`;
+  }
+  h += `<button onclick="irPagina(${pagina + 1})" ${pagina >= total ? 'disabled' : ''}>Próximo ›</button>`;
+  h += `<span class="pg-info">Página ${pagina} de ${total}</span>`;
+  pg.innerHTML = h;
+}
+
+function irPagina(p) {
+  const total = Math.ceil(itensFiltrados.length / POR_PAGINA);
+  if (p < 1 || p > total) return;
+  pagina = p;
+  renderTabela();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── MODAL NOVO/EDITAR ─────────────────────────────────
+function abrirNovo() {
+  editandoId = null;
+  document.getElementById('mo-titulo').textContent = 'Novo Item';
+  document.getElementById('f-codigo').value = '';
+  document.getElementById('f-descricao').value = '';
+  document.getElementById('mo-item').classList.add('open');
+  setTimeout(() => document.getElementById('f-codigo').focus(), 50);
+}
+
+function abrirEditar(id) {
+  const item = itensTodos.find(i => i.id === id);
+  if (!item) return;
+  editandoId = id;
+  document.getElementById('mo-titulo').textContent = 'Editar Item';
+  document.getElementById('f-codigo').value = item.codigo;
+  document.getElementById('f-descricao').value = item.descricao;
+  document.getElementById('mo-item').classList.add('open');
+}
+
+function fecharModal() {
+  document.getElementById('mo-item').classList.remove('open');
+}
+
+async function salvarItem() {
+  const codigo = document.getElementById('f-codigo').value.trim();
+  const descricao = document.getElementById('f-descricao').value.trim();
+  if (!codigo || !descricao) { toast('Preencha código e descrição.', true); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    if (editandoId) {
+      await api('PUT', '/itens-materiais/' + editandoId, { codigo, descricao });
+      toast('Item atualizado com sucesso.');
+    } else {
+      await api('POST', '/itens-materiais', { codigo, descricao });
+      toast('Item cadastrado com sucesso.');
+    }
+    fecharModal();
+    carregarItens();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
+  }
+}
+
+async function excluirItem(id) {
+  const item = itensTodos.find(i => i.id === id);
+  if (!item) return;
+  if (!confirm(`Excluir o item "${item.codigo} — ${item.descricao}"?`)) return;
+  try {
+    await api('DELETE', '/itens-materiais/' + id);
+    toast('Item removido.');
+    carregarItens();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── UTIL ──────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let toastTimer = null;
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+document.getElementById('login-senha').focus();
+</script>
+</body>
+</html>

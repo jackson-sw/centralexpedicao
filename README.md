@@ -5,7 +5,8 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 ## Arquitetura
 
 - `backend/` — API REST em Express (Node.js, CommonJS, `mysql2/promise`). Ponto de entrada: `backend/server.js`.
-- `frontend/index.html` — frontend inteiro em um único arquivo (CSS e JS inline, sem framework, sem bundler). Usa a biblioteca `html5-qrcode` (via CDN) para leitura de código de barras pela câmera.
+- `frontend/index.html` — frontend inteiro em um único arquivo (CSS e JS inline, sem framework, sem bundler). Usa a biblioteca `html5-qrcode` (via CDN) para leitura de código de barras pela câmera e `JsBarcode` (via CDN) para gerar o código de barras da caixa.
+- `frontend/admin.html` — painel administrativo separado (rota `/admin`), com login próprio, para cadastro de itens/materiais (código + descrição).
 - `frontend/manifest.json` + `frontend/service-worker.js` — configuração PWA (instalável, com cache do app shell).
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
@@ -24,6 +25,12 @@ Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / 
 ```bash
 node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
 ```
+
+Existe ainda um terceiro perfil, **Admin** (senha padrão: `admin!2027`), exclusivo do painel administrativo em `/admin` — não aparece na tela de login do app, tem sua própria página e usa `ADMIN_PASSWORD_HASH` no `.env`. Diferente dos perfis Expedição/Em Campo, o token do admin não fica salvo no navegador (`localStorage`) — é preciso logar a cada acesso ao painel, por segurança.
+
+## Painel Administrativo (`/admin`)
+
+Cadastro do catálogo de itens/materiais (campos: **código** e **descrição**), com busca, ordenação, paginação e edição/exclusão — acesse em `http://localhost:3002/admin` (ou `https://seu-dominio.com.br/admin` em produção) e entre com a senha do Admin.
 
 ## Setup e execução
 
@@ -108,7 +115,7 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — ver `backend/.env.example`.
 
 As configurações SMTP já estão prontas em `backend/mail.js` (transporter configurado), mas nenhuma rota dispara e-mail automaticamente ainda — fica pronto para quando uma notificação (ex.: novo carregamento registrado) for solicitada.
 
