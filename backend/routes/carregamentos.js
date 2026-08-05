@@ -71,12 +71,26 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
     );
 
     const carregamentoId = result.insertId;
+    const caixaIdsUsadas = new Set();
 
     for (let i = 0; i < itens.length; i++) {
+      const caixaId = itens[i].caixa_id || null;
+      if (caixaId) caixaIdsUsadas.add(caixaId);
+
       await conn.query(
-        `INSERT INTO carregamento_itens (carregamento_id, codigo_item, descricao, quantidade, ordem)
-         VALUES (?, ?, ?, ?, ?)`,
-        [carregamentoId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, i + 1]
+        `INSERT INTO carregamento_itens (carregamento_id, caixa_id, codigo_item, descricao, quantidade, ordem)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [carregamentoId, caixaId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, i + 1]
+      );
+    }
+
+    // Marca como "expedida" qualquer caixa cujos itens tenham sido usados
+    // neste carregamento — fecha o ciclo almoxarifado → pátio → caminhão.
+    if (caixaIdsUsadas.size) {
+      await conn.query(
+        `UPDATE caixas SET status = 'expedida', expedido_em = NOW()
+         WHERE id IN (?) AND status != 'expedida'`,
+        [Array.from(caixaIdsUsadas)]
       );
     }
 
