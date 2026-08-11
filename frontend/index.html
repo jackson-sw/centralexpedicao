@@ -1049,6 +1049,7 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback) {
       throw new Error(msg);
     }
     const emailOk = resp.headers.get('X-Email-Enviado') === 'true';
+    const emailErro = resp.headers.get('X-Email-Erro');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1058,7 +1059,12 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(emailOk ? 'Romaneio gerado e enviado por e-mail.' : 'Romaneio gerado, mas o envio por e-mail falhou.', !emailOk);
+    toast(
+      emailOk
+        ? 'Romaneio gerado e enviado por e-mail.'
+        : 'Romaneio gerado, mas o e-mail falhou' + (emailErro ? ': ' + emailErro : '.'),
+      !emailOk
+    );
   } catch (e) {
     toast(e.message, true);
   } finally {
@@ -1349,7 +1355,10 @@ function toast(msg, isErr) {
   el.innerHTML = (isErr ? '' : '<span class="toast-dot"></span>') + escapeHtml(msg);
   el.className = 'toast show' + (isErr ? ' err' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  // Erros com mensagem longa (ex: motivo da falha de e-mail) ficam
+  // visíveis por mais tempo para dar tempo de ler.
+  const duracao = isErr && msg.length > 40 ? 7000 : 3200;
+  toastTimer = setTimeout(() => el.classList.remove('show'), duracao);
 }
 
 // ── PWA: SERVICE WORKER ────────────────────────────────

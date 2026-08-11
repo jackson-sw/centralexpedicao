@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db     = require('../db');
 const { auth, apenasAlmoxarifado } = require('../middleware/auth');
 const { ALMOXARIFADO_RESPONSAVEIS } = require('../constants');
-const { enviarEmail } = require('../mail');
+const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioPDF } = require('../pdf/romaneio');
 
 function responsavelValido(nome) {
@@ -245,6 +245,7 @@ router.post('/:id/romaneio', auth, async (req, res) => {
     const nomeArquivo = `romaneio-${caixa.codigo_barras || caixa.id}.pdf`;
 
     let emailEnviado = false;
+    let emailErro = '';
     const destinatarios = (process.env.ROMANEIO_EMAIL_TO || '').trim();
     if (destinatarios) {
       try {
@@ -261,15 +262,18 @@ router.post('/:id/romaneio', auth, async (req, res) => {
         });
         emailEnviado = true;
       } catch (mailErr) {
+        emailErro = sanitizarErroHeader(mailErr.message);
         console.error('[POST /caixas/:id/romaneio] falha ao enviar e-mail:', mailErr.message);
       }
     } else {
+      emailErro = 'ROMANEIO_EMAIL_TO nao configurado no servidor.';
       console.warn('[POST /caixas/:id/romaneio] ROMANEIO_EMAIL_TO não configurado — e-mail não enviado.');
     }
 
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `inline; filename="${nomeArquivo}"`);
     res.set('X-Email-Enviado', emailEnviado ? 'true' : 'false');
+    if (emailErro) res.set('X-Email-Erro', emailErro);
     res.send(pdfBuffer);
   } catch (err) {
     console.error('[POST /caixas/:id/romaneio]', err.message);

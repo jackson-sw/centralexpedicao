@@ -8,6 +8,7 @@ const authRoutes           = require('./routes/auth');
 const carregamentosRoutes  = require('./routes/carregamentos');
 const caixasRoutes         = require('./routes/caixas');
 const itensMateriaisRoutes = require('./routes/itensMateriais');
+const { verificarConexao } = require('./mail');
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
@@ -15,9 +16,10 @@ const PORT = process.env.PORT || 3002;
 // ── Middlewares globais ───────────────────────────────────────
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
-  // Permite que o frontend leia o cabeçalho customizado que informa
-  // se o e-mail do romaneio foi enviado com sucesso (ver POST /api/caixas/:id/romaneio).
-  exposedHeaders: ['X-Email-Enviado'],
+  // Permite que o frontend leia os cabeçalhos customizados que informam
+  // se o e-mail do romaneio foi enviado com sucesso, e por quê não, quando
+  // for o caso (ver POST /api/caixas/:id/romaneio e /api/carregamentos/:id/romaneio).
+  exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro'],
 }));
 app.use(express.json());
 
@@ -53,6 +55,19 @@ app.get('*', (req, res) => {
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// Testa a conexão/autenticação SMTP configurada em backend/.env, sem
+// disparar nenhum e-mail — útil para diagnosticar ROMANEIO_EMAIL_TO
+// "não enviado" sem precisar gerar um romaneio de verdade.
+// Ex.: curl http://localhost:3002/api/health/mail
+app.get('/api/health/mail', async (req, res) => {
+  try {
+    await verificarConexao();
+    res.json({ status: 'ok', mensagem: 'Conexão SMTP autenticada com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ status: 'erro', mensagem: err.message });
+  }
+});
 
 // ── Inicia servidor ───────────────────────────────────────────
 app.listen(PORT, () => {
