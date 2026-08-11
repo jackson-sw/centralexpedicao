@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { auth, apenasExpedicao } = require('../middleware/auth');
+const { enviarEmail } = require('../mail');
+const { gerarRomaneioCarregamentoPDF } = require('../pdf/romaneioCarregamento');
 
 // GET /api/carregamentos — histórico (mais recentes primeiro)
 router.get('/', auth, async (req, res) => {
@@ -102,6 +104,61 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
     res.status(500).json({ erro: 'Erro ao registrar carregamento.' });
   } finally {
     conn.release();
+  }
+});
+
+// POST /api/carregamentos/:id/romaneio — gera o PDF do romaneio do
+// carregamento (itens + responsável + placa + destino), envia por
+// e-mail e devolve o PDF na resposta para visualização/impressão
+// imediata. Diferente da caixa, o carregamento já nasce completo
+// (não tem estado "aberto"), então o romaneio está sempre disponível.
+router.post('/:id/romaneio', auth, async (req, res) => {
+  try {
+    const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+
+    const [itens] = await db.query(
+      `SELECT ci.*, cx.codigo_barras AS caixa_codigo
+       FROM carregamento_itens ci
+       LEFT JOIN caixas cx ON cx.id = ci.caixa_id
+       WHERE ci.carregamento_id = ?
+       ORDER BY ci.ordem ASC, ci.id ASC`,
+      [carregamento.id]
+    );
+
+    const pdfBuffer = await gerarRomaneioCarregamentoPDF({ carregamento, itens });
+    const nomeArquivo = `romaneio-carregamento-${String(carregamento.numero_projeto).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+
+    let emailEnviado = false;
+    const destinatarios = (process.env.ROMANEIO_EMAIL_TO || '').trim();
+    if (destinatarios) {
+      try {
+        await enviarEmail({
+          to: destinatarios,
+          subject: `Romaneio — Carregamento #${carregamento.numero_projeto}`,
+          html: `
+            <p>Segue em anexo o romaneio do carregamento <strong>#${carregamento.numero_projeto}</strong>,
+            placa <strong>${carregamento.placa || '—'}</strong>, destino ${carregamento.cidade_destino},
+            registrado em ${new Date(carregamento.criado_em).toLocaleString('pt-BR')}.</p>
+            <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
+          `,
+          attachments: [{ filename: nomeArquivo, content: pdfBuffer, contentType: 'application/pdf' }],
+        });
+        emailEnviado = true;
+      } catch (mailErr) {
+        console.error('[POST /carregamentos/:id/romaneio] falha ao enviar e-mail:', mailErr.message);
+      }
+    } else {
+      console.warn('[POST /carregamentos/:id/romaneio] ROMANEIO_EMAIL_TO não configurado — e-mail não enviado.');
+    }
+
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${nomeArquivo}"`);
+    res.set('X-Email-Enviado', emailEnviado ? 'true' : 'false');
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[POST /carregamentos/:id/romaneio]', err.message);
+    res.status(500).json({ erro: 'Erro ao gerar romaneio.' });
   }
 });
 

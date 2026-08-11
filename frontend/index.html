@@ -413,7 +413,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <button class="mx" onclick="fecharModal('mo-detalhe')">×</button>
     </div>
     <div class="mb" id="det-body"></div>
-    <div class="mf">
+    <div class="mf" id="det-footer">
       <button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>
     </div>
   </div>
@@ -720,6 +720,10 @@ async function verDetalhe(id) {
         </div>
       `).join('')}
     `;
+    document.getElementById('det-footer').innerHTML = `
+      <button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>
+      <button class="btn btn-blue" id="btn-romaneio-carreg-${c.id}" onclick="gerarRomaneioCarregamento(${c.id})">🧾 Romaneio</button>
+    `;
     abrirModal('mo-detalhe');
   } catch (e) {
     toast(e.message, true);
@@ -1023,11 +1027,19 @@ async function finalizarCaixa(id) {
 // ── ROMANEIO (PDF) ─────────────────────────────────────
 // Não usa o helper api() porque a resposta é um PDF binário, não JSON.
 async function gerarRomaneio(id) {
-  const btn = document.getElementById('btn-romaneio-' + id);
+  await baixarRomaneio(`/caixas/${id}/romaneio`, `btn-romaneio-${id}`, `romaneio-caixa-${id}.pdf`);
+}
+
+async function gerarRomaneioCarregamento(id) {
+  await baixarRomaneio(`/carregamentos/${id}/romaneio`, `btn-romaneio-carreg-${id}`, `romaneio-carregamento-${id}.pdf`);
+}
+
+async function baixarRomaneio(path, btnId, nomeArquivoFallback) {
+  const btn = document.getElementById(btnId);
   const textoOriginal = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
   try {
-    const resp = await fetch(API + '/caixas/' + id + '/romaneio', {
+    const resp = await fetch(API + path, {
       method: 'POST',
       headers: TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {},
     });
@@ -1041,7 +1053,7 @@ async function gerarRomaneio(id) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `romaneio-caixa-${id}.pdf`;
+    a.download = nomeArquivoFallback;
     document.body.appendChild(a);
     a.click();
     a.remove();
