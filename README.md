@@ -15,12 +15,13 @@ O backend serve o frontend estaticamente — em produção tudo roda em um únic
 
 ## Autenticação
 
-Dois perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardado em `backend/.env` (mesmo modelo usado pelo perfil "Central Profissional" do Central Logística):
+Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardado em `backend/.env` (mesmo modelo usado pelo perfil "Central Profissional" do Central Logística):
 
-- **Expedição** (senha padrão: `exp!2027`) — acesso completo: vê o histórico e pode registrar novos carregamentos.
+- **Expedição** (senha padrão: `exp!2027`) — vê o histórico de carregamentos (e, somente leitura, o de caixas) e pode registrar novos carregamentos.
+- **Almoxarifado** (senha padrão: `Almox0987`) — monta e fecha as caixas (função "Nova Caixa"): move os itens pequenos do almoxarifado para o pátio da expedição e gera o código de barras da caixa.
 - **Em Campo** (senha padrão: `emcampo!26`) — login funcional, mas por enquanto exibe uma tela "em breve" (funcionalidade ainda não definida).
 
-Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` em `backend/.env`:
+Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` em `backend/.env`:
 
 ```bash
 node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
@@ -84,7 +85,7 @@ Para gerar um novo hash de senha (Expedição ou Em Campo) dentro do próprio co
 
 ```bash
 docker compose exec app node -e "require('bcrypt').hash('SUA_SENHA',12).then(console.log)"
-# copie o hash gerado para EXPEDICAO_PASSWORD_HASH ou EM_CAMPO_PASSWORD_HASH no .env
+# copie o hash gerado para EXPEDICAO_PASSWORD_HASH, EM_CAMPO_PASSWORD_HASH ou ALMOXARIFADO_PASSWORD_HASH no .env
 # e rode: docker compose up -d --build
 ```
 
@@ -115,7 +116,17 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — ver `backend/.env.example`.
+
+## Atualizando um banco já existente
+
+Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql` (sem o perfil Almoxarifado), rode manualmente o script incremental:
+
+```bash
+mysql -u root -p burntech_expedicao < alter_almoxarifado.sql
+```
+
+Ele adiciona `'almoxarifado'` como valor válido de `criado_por_perfil` em `caixas` e `carregamentos`.
 
 As configurações SMTP já estão prontas em `backend/mail.js` (transporter configurado), mas nenhuma rota dispara e-mail automaticamente ainda — fica pronto para quando uma notificação (ex.: novo carregamento registrado) for solicitada.
 

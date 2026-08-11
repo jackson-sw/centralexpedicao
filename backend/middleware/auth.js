@@ -23,6 +23,14 @@ function apenasExpedicao(req, res, next) {
   next();
 }
 
+// Bloqueio: só o perfil Almoxarifado pode montar/fechar novas caixas.
+function apenasAlmoxarifado(req, res, next) {
+  if (req.usuario?.perfil !== 'almoxarifado') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Almoxarifado.' });
+  }
+  next();
+}
+
 // Bloqueio: só o perfil Admin (painel /admin) pode gerenciar o
 // catálogo de itens/materiais.
 function apenasAdmin(req, res, next) {
@@ -32,4 +40,4 @@ function apenasAdmin(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasAdmin };
+module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasAdmin };

@@ -22,7 +22,7 @@ CREATE TABLE carregamentos (
   cidade_destino    VARCHAR(150) NOT NULL,
   observacoes       VARCHAR(500) NULL,
   status            ENUM('em_andamento', 'concluido', 'cancelado') NOT NULL DEFAULT 'concluido',
-  criado_por_perfil ENUM('expedicao', 'em_campo') NOT NULL DEFAULT 'expedicao',
+  criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'expedicao',
   criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -46,7 +46,7 @@ CREATE TABLE caixas (
   status            ENUM('fechada', 'expedida') NOT NULL DEFAULT 'fechada',
   responsavel_nome  VARCHAR(150) NOT NULL,
   observacoes       VARCHAR(500) NULL,
-  criado_por_perfil ENUM('expedicao', 'em_campo') NOT NULL DEFAULT 'expedicao',
+  criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'almoxarifado',
   criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expedido_em       DATETIME NULL,
   PRIMARY KEY (id),
@@ -168,8 +168,9 @@ CREATE TABLE itens_materiais (
 
 -- ------------------------------------------------------------
 -- Dados iniciais: nenhum. Os perfis de acesso (Expedição / Em Campo /
--- Admin) são autenticados por senha fixa via hash bcrypt em
--- backend/.env (EXPEDICAO_PASSWORD_HASH / EM_CAMPO_PASSWORD_HASH /
+-- Almoxarifado / Admin) são autenticados por senha fixa via hash
+-- bcrypt em backend/.env (EXPEDICAO_PASSWORD_HASH /
+-- EM_CAMPO_PASSWORD_HASH / ALMOXARIFADO_PASSWORD_HASH /
 -- ADMIN_PASSWORD_HASH), não há tabela de usuários — mesmo modelo do
 -- perfil "central" no Central Logística.
 -- ------------------------------------------------------------

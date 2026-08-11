@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasExpedicao } = require('../middleware/auth');
+const { auth, apenasAlmoxarifado } = require('../middleware/auth');
 
 // GET /api/caixas — histórico (mais recentes primeiro)
 router.get('/', auth, async (req, res) => {
@@ -63,11 +63,11 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/caixas — montar e fechar uma nova caixa (Expedição)
+// POST /api/caixas — montar e fechar uma nova caixa (Almoxarifado)
 // Ao ser salva, a caixa já nasce "fechada" e ganha um código de
 // barras próprio (CX + id com zero à esquerda), pronto para
 // impressão da etiqueta.
-router.post('/', auth, apenasExpedicao, async (req, res) => {
+router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
   const conn = await db.getConnection();
   try {
     const { responsavel_nome, observacoes, itens } = req.body;
