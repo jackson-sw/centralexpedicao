@@ -153,12 +153,13 @@ GROUP BY c.id;
 -- ------------------------------------------------------------
 -- Tabela: itens_materiais
 -- Catálogo mestre de materiais, mantido pelo painel administrativo
--- (/admin). Apenas código (único) e descrição.
+-- (/admin). Código (único), descrição e quantidade em estoque.
 -- ------------------------------------------------------------
 CREATE TABLE itens_materiais (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   codigo        VARCHAR(100) NOT NULL,
   descricao     VARCHAR(255) NOT NULL,
+  quantidade    DECIMAL(10,2) NOT NULL DEFAULT 1.00,
   criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

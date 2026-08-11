@@ -28,18 +28,22 @@ router.get('/:id', auth, apenasAdmin, async (req, res) => {
 // POST /api/itens-materiais — cadastrar novo item
 router.post('/', auth, apenasAdmin, async (req, res) => {
   try {
-    const codigo    = (req.body.codigo    || '').trim();
-    const descricao = (req.body.descricao || '').trim();
+    const codigo     = (req.body.codigo    || '').trim();
+    const descricao  = (req.body.descricao || '').trim();
+    const quantidade = parseFloat(req.body.quantidade);
 
     if (!codigo || !descricao) {
       return res.status(400).json({ erro: 'Campos obrigatórios: código e descrição.' });
     }
+    if (!Number.isFinite(quantidade) || quantidade < 0) {
+      return res.status(400).json({ erro: 'Quantidade inválida.' });
+    }
 
     const [result] = await db.query(
-      'INSERT INTO itens_materiais (codigo, descricao) VALUES (?, ?)',
-      [codigo, descricao]
+      'INSERT INTO itens_materiais (codigo, descricao, quantidade) VALUES (?, ?, ?)',
+      [codigo, descricao, quantidade]
     );
-    res.status(201).json({ id: result.insertId, codigo, descricao, mensagem: 'Item cadastrado com sucesso.' });
+    res.status(201).json({ id: result.insertId, codigo, descricao, quantidade, mensagem: 'Item cadastrado com sucesso.' });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ erro: 'Já existe um item cadastrado com esse código.' });
@@ -52,16 +56,20 @@ router.post('/', auth, apenasAdmin, async (req, res) => {
 // PUT /api/itens-materiais/:id — editar item existente
 router.put('/:id', auth, apenasAdmin, async (req, res) => {
   try {
-    const codigo    = (req.body.codigo    || '').trim();
-    const descricao = (req.body.descricao || '').trim();
+    const codigo     = (req.body.codigo    || '').trim();
+    const descricao  = (req.body.descricao || '').trim();
+    const quantidade = parseFloat(req.body.quantidade);
 
     if (!codigo || !descricao) {
       return res.status(400).json({ erro: 'Campos obrigatórios: código e descrição.' });
     }
+    if (!Number.isFinite(quantidade) || quantidade < 0) {
+      return res.status(400).json({ erro: 'Quantidade inválida.' });
+    }
 
     const [result] = await db.query(
-      'UPDATE itens_materiais SET codigo = ?, descricao = ? WHERE id = ?',
-      [codigo, descricao, req.params.id]
+      'UPDATE itens_materiais SET codigo = ?, descricao = ?, quantidade = ? WHERE id = ?',
+      [codigo, descricao, quantidade, req.params.id]
     );
     if (!result.affectedRows) return res.status(404).json({ erro: 'Item não encontrado.' });
     res.json({ mensagem: 'Item atualizado com sucesso.' });

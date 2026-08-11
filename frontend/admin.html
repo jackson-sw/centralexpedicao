@@ -73,6 +73,8 @@ td{padding:13px 16px;font-size:13.5px;border-bottom:1px solid #f0f1f3;vertical-a
 tr:last-child td{border-bottom:none;}
 tbody tr:hover td{background:#fafbff;}
 .td-codigo{font-family:monospace;font-weight:700;color:var(--text);}
+.td-qtd{text-align:right;font-variant-numeric:tabular-nums;}
+th.th-qtd{text-align:right;}
 .empty-row{text-align:center;padding:56px 24px;color:var(--muted2);font-size:14px;}
 .acoes-cell{display:flex;gap:6px;}
 
@@ -120,7 +122,7 @@ tbody tr:hover td{background:#fafbff;}
   .login-card{padding:30px 22px;}
   header{padding:0 16px;}
   .wrap{padding:16px 12px;}
-  th:nth-child(3),td:nth-child(3){white-space:nowrap;}
+  th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4){white-space:nowrap;}
   .toolbar{flex-direction:column;align-items:stretch;}
   .toolbar .btn{width:100%;justify-content:center;}
   .scanner-modal{width:100%;height:100%;max-width:100%;border-radius:0;display:flex;flex-direction:column;}
@@ -177,11 +179,12 @@ tbody tr:hover td{background:#fafbff;}
           <tr>
             <th class="sortable" id="th-codigo" onclick="sortBy('codigo')">Código ↑</th>
             <th class="sortable" id="th-descricao" onclick="sortBy('descricao')">Descrição</th>
+            <th class="sortable th-qtd" id="th-quantidade" style="width:110px" onclick="sortBy('quantidade')">Quantidade</th>
             <th style="width:150px">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="3" class="empty-row">Carregando...</td></tr>
+          <tr><td colspan="4" class="empty-row">Carregando...</td></tr>
         </tbody>
       </table>
       <div class="pagination" id="pagination"></div>
@@ -205,6 +208,7 @@ tbody tr:hover td{background:#fafbff;}
         </div>
       </div>
       <div class="fg"><label>Descrição *</label><input id="f-descricao" placeholder="Ex: Parafuso sextavado 1/2 pol" onkeydown="if(event.key==='Enter')salvarItem()"></div>
+      <div class="fg"><label>Quantidade *</label><input id="f-quantidade" type="number" min="0" step="1" placeholder="Ex: 100" onkeydown="if(event.key==='Enter')salvarItem()"></div>
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharModal()">Cancelar</button>
@@ -291,7 +295,7 @@ async function carregarItens() {
     aplicarFiltro();
   } catch (e) {
     document.getElementById('tbody').innerHTML =
-      `<tr><td colspan="3" class="empty-row" style="color:var(--red)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+      `<tr><td colspan="4" class="empty-row" style="color:var(--red)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
   }
 }
 
@@ -315,7 +319,13 @@ function sortBy(col) {
 
 function renderTabela() {
   const dir = sortDir === 'asc' ? 1 : -1;
+  const numerico = sortCol === 'quantidade';
   itensFiltrados.sort((a, b) => {
+    if (numerico) {
+      const va = parseFloat(a.quantidade) || 0;
+      const vb = parseFloat(b.quantidade) || 0;
+      return (va - vb) * dir;
+    }
     const va = (a[sortCol] || '').toLowerCase();
     const vb = (b[sortCol] || '').toLowerCase();
     return va < vb ? -dir : va > vb ? dir : 0;
@@ -323,13 +333,14 @@ function renderTabela() {
 
   document.getElementById('th-codigo').textContent = 'Código' + (sortCol === 'codigo' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
   document.getElementById('th-descricao').textContent = 'Descrição' + (sortCol === 'descricao' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
+  document.getElementById('th-quantidade').textContent = 'Quantidade' + (sortCol === 'quantidade' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
 
   const tb = document.getElementById('tbody');
   const ini = (pagina - 1) * POR_PAGINA;
   const page = itensFiltrados.slice(ini, ini + POR_PAGINA);
 
   if (!itensFiltrados.length) {
-    tb.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum item cadastrado.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum item cadastrado.</td></tr>';
     document.getElementById('pagination').innerHTML = '';
     return;
   }
@@ -338,6 +349,7 @@ function renderTabela() {
     <tr>
       <td class="td-codigo">${esc(i.codigo)}</td>
       <td>${esc(i.descricao)}</td>
+      <td class="td-qtd">${formatQtd(i.quantidade)}</td>
       <td class="acoes-cell">
         <button class="btn btn-out btn-sm" onclick="abrirEditar(${i.id})">Editar</button>
         <button class="btn btn-out btn-sm" style="color:#991b1b;border-color:#fca5a5" onclick="excluirItem(${i.id})">Excluir</button>
@@ -346,6 +358,11 @@ function renderTabela() {
   `).join('');
 
   renderPaginacao();
+}
+
+function formatQtd(q) {
+  const n = parseFloat(q) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 function renderPaginacao() {
@@ -380,6 +397,7 @@ function abrirNovo() {
   document.getElementById('mo-titulo').textContent = 'Novo Item';
   document.getElementById('f-codigo').value = '';
   document.getElementById('f-descricao').value = '';
+  document.getElementById('f-quantidade').value = '';
   document.getElementById('mo-item').classList.add('open');
   setTimeout(() => document.getElementById('f-codigo').focus(), 50);
 }
@@ -391,6 +409,7 @@ function abrirEditar(id) {
   document.getElementById('mo-titulo').textContent = 'Editar Item';
   document.getElementById('f-codigo').value = item.codigo;
   document.getElementById('f-descricao').value = item.descricao;
+  document.getElementById('f-quantidade').value = item.quantidade;
   document.getElementById('mo-item').classList.add('open');
 }
 
@@ -401,16 +420,18 @@ function fecharModal() {
 async function salvarItem() {
   const codigo = document.getElementById('f-codigo').value.trim();
   const descricao = document.getElementById('f-descricao').value.trim();
+  const quantidade = parseFloat(document.getElementById('f-quantidade').value);
   if (!codigo || !descricao) { toast('Preencha código e descrição.', true); return; }
+  if (!Number.isFinite(quantidade) || quantidade < 0) { toast('Informe uma quantidade válida.', true); return; }
 
   const btn = document.getElementById('btn-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
     if (editandoId) {
-      await api('PUT', '/itens-materiais/' + editandoId, { codigo, descricao });
+      await api('PUT', '/itens-materiais/' + editandoId, { codigo, descricao, quantidade });
       toast('Item atualizado com sucesso.');
     } else {
-      await api('POST', '/itens-materiais', { codigo, descricao });
+      await api('POST', '/itens-materiais', { codigo, descricao, quantidade });
       toast('Item cadastrado com sucesso.');
     }
     fecharModal();
