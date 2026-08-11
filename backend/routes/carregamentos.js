@@ -45,11 +45,11 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, apenasExpedicao, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { responsavel_nome, numero_projeto, cidade_destino, observacoes, itens } = req.body;
+    const { responsavel_nome, numero_projeto, placa, cidade_destino, observacoes, itens } = req.body;
 
-    if (!responsavel_nome || !numero_projeto || !cidade_destino) {
+    if (!responsavel_nome || !numero_projeto || !placa || !cidade_destino) {
       conn.release();
-      return res.status(400).json({ erro: 'Campos obrigatórios: responsavel_nome, numero_projeto, cidade_destino.' });
+      return res.status(400).json({ erro: 'Campos obrigatórios: responsavel_nome, numero_projeto, placa, cidade_destino.' });
     }
     if (!Array.isArray(itens) || itens.length === 0) {
       conn.release();
@@ -65,9 +65,9 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
     await conn.beginTransaction();
 
     const [result] = await conn.query(
-      `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, cidade_destino, observacoes, criado_por_perfil)
-       VALUES ('carregamento', ?, ?, ?, ?, ?)`,
-      [responsavel_nome, numero_projeto, cidade_destino, observacoes || null, req.usuario.perfil]
+      `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, placa, cidade_destino, observacoes, criado_por_perfil)
+       VALUES ('carregamento', ?, ?, ?, ?, ?, ?)`,
+      [responsavel_nome, numero_projeto, placa, cidade_destino, observacoes || null, req.usuario.perfil]
     );
 
     const carregamentoId = result.insertId;

@@ -19,6 +19,7 @@ CREATE TABLE carregamentos (
   tipo              ENUM('carregamento', 'descarregamento') NOT NULL DEFAULT 'carregamento',
   responsavel_nome  VARCHAR(150) NOT NULL,
   numero_projeto    VARCHAR(50)  NOT NULL,
+  placa             VARCHAR(10)  NOT NULL,
   cidade_destino    VARCHAR(150) NOT NULL,
   observacoes       VARCHAR(500) NULL,
   status            ENUM('em_andamento', 'concluido', 'cancelado') NOT NULL DEFAULT 'concluido',
@@ -27,6 +28,7 @@ CREATE TABLE carregamentos (
   atualizado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_carregamentos_numero_projeto (numero_projeto),
+  KEY idx_carregamentos_placa (placa),
   KEY idx_carregamentos_criado_em (criado_em),
   KEY idx_carregamentos_status (status),
   KEY idx_carregamentos_tipo (tipo)

@@ -385,8 +385,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div class="fg"><label>Nome do responsável *</label><input id="nc-responsavel" placeholder="Ex: João da Silva"></div>
       <div class="fr2">
         <div class="fg"><label>Nº do Projeto *</label><input id="nc-projeto" placeholder="Ex: PRJ-0142"></div>
-        <div class="fg"><label>Cidade de destino *</label><input id="nc-cidade" list="cidades-br" placeholder="Ex: Rio do Sul - SC"></div>
+        <div class="fg"><label>Placa do caminhão *</label><input id="nc-placa" placeholder="Ex: ABC-1234" maxlength="8" style="text-transform:uppercase"></div>
       </div>
+      <div class="fg"><label>Cidade de destino *</label><input id="nc-cidade" list="cidades-br" placeholder="Ex: Rio do Sul - SC"></div>
 
       <div class="mat-head">
         <label>Lista de materiais *</label>
@@ -691,6 +692,7 @@ function renderLista(lista) {
         </div>
         <span class="cc-badge">${c.tipo === 'carregamento' ? 'Carregamento' : 'Descarregamento'}</span>
       </div>
+      <div class="cf"><span class="cf-l">Placa</span><span class="cf-v">${escapeHtml(c.placa)}</span></div>
       <div class="cf"><span class="cf-l">Destino</span><span class="cf-v">${escapeHtml(c.cidade_destino)}</span></div>
       <div class="cc-foot">
         <span class="cc-time">${fmtDT(c.criado_em)}</span>
@@ -704,7 +706,7 @@ async function verDetalhe(id) {
   try {
     const c = await api('GET', '/carregamentos/' + id);
     document.getElementById('det-titulo').textContent = '#' + c.numero_projeto + ' — ' + c.cidade_destino;
-    document.getElementById('det-sub').textContent = c.responsavel_nome + ' · ' + fmtDT(c.criado_em);
+    document.getElementById('det-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
     document.getElementById('det-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
       ${c.itens.map(i => `
@@ -1077,6 +1079,7 @@ function imprimirEtiquetaCaixa() {
 function abrirNovoCarregamento() {
   document.getElementById('nc-responsavel').value = '';
   document.getElementById('nc-projeto').value = '';
+  document.getElementById('nc-placa').value = '';
   document.getElementById('nc-cidade').value = '';
   itensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
   renderItens();
@@ -1133,10 +1136,11 @@ function removeItemRow(idx) {
 async function salvarCarregamento() {
   const responsavel_nome = document.getElementById('nc-responsavel').value.trim();
   const numero_projeto   = document.getElementById('nc-projeto').value.trim();
+  const placa             = document.getElementById('nc-placa').value.trim().toUpperCase();
   const cidade_destino   = document.getElementById('nc-cidade').value.trim();
 
-  if (!responsavel_nome || !numero_projeto || !cidade_destino) {
-    toast('Preencha responsável, projeto e cidade de destino.', true); return;
+  if (!responsavel_nome || !numero_projeto || !placa || !cidade_destino) {
+    toast('Preencha responsável, projeto, placa e cidade de destino.', true); return;
   }
   const itens = itensAtuais
     .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null }))
@@ -1147,7 +1151,7 @@ async function salvarCarregamento() {
   const btn = document.getElementById('btn-salvar-carregamento');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, cidade_destino, itens });
+    await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens });
     toast('Carregamento registrado com sucesso.');
     fecharModal('mo-novo');
     carregarHistorico();
