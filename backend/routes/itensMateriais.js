@@ -13,6 +13,24 @@ router.get('/', auth, apenasAdmin, async (req, res) => {
   }
 });
 
+// GET /api/itens-materiais/codigo/:codigo — busca por código exato.
+// Usado para auto-preencher a Descrição ao digitar/escanear o código
+// do item em Novo Carregamento / Nova Caixa / Alterar Caixa — por isso
+// qualquer perfil autenticado pode consultar (não é exclusivo do admin).
+router.get('/codigo/:codigo', auth, async (req, res) => {
+  try {
+    const [[item]] = await db.query(
+      'SELECT codigo, descricao, quantidade FROM itens_materiais WHERE codigo = ?',
+      [req.params.codigo]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado no catálogo.' });
+    res.json(item);
+  } catch (err) {
+    console.error('[GET /itens-materiais/codigo/:codigo]', err.message);
+    res.status(500).json({ erro: 'Erro ao buscar item.' });
+  }
+});
+
 // GET /api/itens-materiais/:id
 router.get('/:id', auth, apenasAdmin, async (req, res) => {
   try {

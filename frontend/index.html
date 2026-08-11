@@ -846,14 +846,14 @@ function renderItensCaixa() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItemCaixa(${idx},'codigo_item',this.value)">
+          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItemCaixa(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('caixa',${idx})">
           <button type="button" class="btn-cam" onclick="abrirScanner('caixa',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
       <div class="mat-fr">
         <div class="fg" style="margin-bottom:0">
           <label>Descrição *</label>
-          <input placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemCaixa(${idx},'descricao',this.value)">
+          <input id="descricao-caixa-${idx}" placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemCaixa(${idx},'descricao',this.value)">
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
@@ -948,14 +948,14 @@ function renderItensAlterar() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItemAlterar(${idx},'codigo_item',this.value)">
+          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItemAlterar(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('alterar',${idx})">
           <button type="button" class="btn-cam" onclick="abrirScanner('alterar',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
       <div class="mat-fr">
         <div class="fg" style="margin-bottom:0">
           <label>Descrição *</label>
-          <input placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemAlterar(${idx},'descricao',this.value)">
+          <input id="descricao-alterar-${idx}" placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemAlterar(${idx},'descricao',this.value)">
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
@@ -1094,14 +1094,14 @@ function renderItens() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItem(${idx},'codigo_item',this.value)">
+          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItem(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento',${idx})">
           <button type="button" class="btn-cam" onclick="abrirScanner('carregamento',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
       <div class="mat-fr">
         <div class="fg" style="margin-bottom:0">
           <label>Descrição *</label>
-          <input placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItem(${idx},'descricao',this.value)">
+          <input id="descricao-carregamento-${idx}" placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItem(${idx},'descricao',this.value)">
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
@@ -1183,10 +1183,12 @@ async function abrirScanner(tipo, idx) {
         if (ctx.tipo === 'caixa') {
           atualizaItemCaixa(ctx.idx, 'codigo_item', decodedText);
           renderItensCaixa();
+          preencherDescricaoPorCodigo('caixa', ctx.idx);
           toast('Código lido: ' + decodedText);
         } else if (ctx.tipo === 'alterar') {
           atualizaItemAlterar(ctx.idx, 'codigo_item', decodedText);
           renderItensAlterar();
+          preencherDescricaoPorCodigo('alterar', ctx.idx);
           toast('Código lido: ' + decodedText);
         } else {
           processarCodigoCarregamento(ctx.idx, decodedText);
@@ -1224,7 +1226,40 @@ async function processarCodigoCarregamento(idx, codigo) {
     // Código não corresponde a nenhuma caixa — trata como item avulso normal.
     atualizaItem(idx, 'codigo_item', codigo);
     renderItens();
+    preencherDescricaoPorCodigo('carregamento', idx);
     toast('Código lido: ' + codigo);
+  }
+}
+
+// ── AUTO-PREENCHIMENTO DA DESCRIÇÃO A PARTIR DO CATÁLOGO ──
+// Ao informar o código do item (digitado ou escaneado) em Novo
+// Carregamento / Nova Caixa / Alterar Caixa, busca o item cadastrado
+// no painel administrativo (itens_materiais) e preenche a descrição
+// automaticamente — sem sobrescrever uma descrição já digitada.
+async function preencherDescricaoPorCodigo(tipo, idx) {
+  const arr = tipo === 'carregamento' ? itensAtuais
+            : tipo === 'caixa'        ? caixaItensAtuais
+            : tipo === 'alterar'      ? novosItensAlterar
+            : null;
+  if (!arr) return;
+
+  const item = arr[idx];
+  if (!item) return;
+  const codigo = (item.codigo_item || '').trim();
+  if (!codigo || (item.descricao && item.descricao.trim())) return;
+
+  try {
+    const encontrado = await api('GET', '/itens-materiais/codigo/' + encodeURIComponent(codigo));
+    // Confere se nada mudou nesse item enquanto a busca estava em andamento.
+    const atual = arr[idx];
+    if (!atual || (atual.codigo_item || '').trim() !== codigo) return;
+    if (atual.descricao && atual.descricao.trim()) return;
+
+    atual.descricao = encontrado.descricao;
+    const campo = document.getElementById(`descricao-${tipo}-${idx}`);
+    if (campo) campo.value = encontrado.descricao;
+  } catch (e) {
+    // Código não cadastrado no catálogo — segue normal, sem erro visível.
   }
 }
 
