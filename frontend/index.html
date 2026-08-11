@@ -114,6 +114,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .cc-proj{font-size:15px;font-weight:800;font-family:monospace;letter-spacing:.2px;}
 .cc-sub{font-size:12px;color:var(--muted);margin-top:3px;}
 .cc-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f3e8ff;color:#7c3aed;white-space:nowrap;flex-shrink:0;}
+.cc-badge.aberta{background:#dbeafe;color:#1d4ed8;}
 .cc-badge.fechada{background:#fef3c7;color:#92400e;}
 .cc-badge.expedida{background:#dcfce7;color:#166534;}
 .cf{display:flex;gap:6px;margin-bottom:5px;font-size:13px;align-items:baseline;}
@@ -337,7 +338,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div class="stats-row">
         <div class="stat-card accent">
           <div class="stat-num" id="stat-almox-hoje">0</div>
-          <div class="stat-lbl">Caixas fechadas hoje</div>
+          <div class="stat-lbl">Caixas em aberto</div>
         </div>
         <div class="stat-card">
           <div class="stat-num" id="stat-almox-total">0</div>
@@ -423,12 +424,20 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">🧰 Nova Caixa</div>
-        <div class="ms">Almoxarifado → pátio da expedição. Monte a caixa com os itens pequenos.</div>
+        <div class="ms">Almoxarifado → pátio da expedição. A caixa fica "aberta" e pode receber mais itens depois — use "Finalizar" quando estiver pronta.</div>
       </div>
       <button class="mx" onclick="fecharModal('mo-caixa')">×</button>
     </div>
     <div class="mb">
-      <div class="fg"><label>Nome do responsável *</label><input id="cx-responsavel" placeholder="Ex: Maria Souza"></div>
+      <div class="fg">
+        <label>Nome do responsável *</label>
+        <select id="cx-responsavel">
+          <option value="" disabled selected>Selecione...</option>
+          <option>Kerllon Pereira</option>
+          <option>Léo Neves</option>
+          <option>Filipe Luchtenberg</option>
+        </select>
+      </div>
       <div class="fg"><label>Observações</label><textarea id="cx-obs" rows="2" placeholder="Opcional"></textarea></div>
 
       <div class="mat-head">
@@ -439,7 +448,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharModal('mo-caixa')">Cancelar</button>
-      <button class="btn btn-blue" id="btn-salvar-caixa" onclick="salvarCaixa()">Fechar Caixa e Gerar Código</button>
+      <button class="btn btn-blue" id="btn-salvar-caixa" onclick="salvarCaixa()">Salvar</button>
     </div>
   </div>
 </div>
@@ -479,8 +488,44 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <button class="mx" onclick="fecharModal('mo-caixa-detalhe')">×</button>
     </div>
     <div class="mb" id="det2-body"></div>
-    <div class="mf">
+    <div class="mf" id="det2-footer">
       <button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ALTERAR CAIXA (adicionar novos itens a uma caixa aberta) -->
+<div class="overlay" id="mo-caixa-alterar">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <div class="mt">✏️ Alterar Caixa</div>
+        <div class="ms" id="alt-sub">Adicione novos itens à caixa</div>
+      </div>
+      <button class="mx" onclick="fecharModal('mo-caixa-alterar')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label>Novo responsável *</label>
+        <select id="alt-responsavel">
+          <option value="" disabled selected>Selecione...</option>
+          <option>Kerllon Pereira</option>
+          <option>Léo Neves</option>
+          <option>Filipe Luchtenberg</option>
+        </select>
+      </div>
+
+      <div id="alt-itens-existentes"></div>
+
+      <div class="mat-head">
+        <label>Novos itens *</label>
+        <button type="button" class="btn-add-round" onclick="addItemAlterar()" title="Adicionar item">+</button>
+      </div>
+      <div id="mat-list-alterar"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal('mo-caixa-alterar')">Cancelar</button>
+      <button class="btn btn-blue" id="btn-salvar-alterar" onclick="salvarAlteracaoCaixa()">Salvar Alteração</button>
     </div>
   </div>
 </div>
@@ -700,8 +745,7 @@ async function carregarCaixas(targetId = 'lista-caixas') {
     const elHoje = document.getElementById('stat-almox-hoje');
     const elTotal = document.getElementById('stat-almox-total');
     if (elHoje && elTotal) {
-      const hoje = new Date().toDateString();
-      elHoje.textContent = lista.filter(c => new Date(c.criado_em).toDateString() === hoje).length;
+      elHoje.textContent = lista.filter(c => c.status === 'aberta').length;
       elTotal.textContent = lista.length;
     }
   } catch (e) {
@@ -725,7 +769,7 @@ function renderCaixas(lista, targetId = 'lista-caixas') {
           <div class="cc-proj">${escapeHtml(c.codigo_barras || ('Caixa #' + c.id))}</div>
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
-        <span class="cc-badge ${c.status}">${c.status === 'expedida' ? 'Expedida' : 'Fechada'}</span>
+        <span class="cc-badge ${c.status}">${labelStatusCaixa(c.status)}</span>
       </div>
       <div class="cc-foot">
         <span class="cc-time">${fmtDT(c.criado_em)}</span>
@@ -735,11 +779,18 @@ function renderCaixas(lista, targetId = 'lista-caixas') {
   `).join('');
 }
 
+function labelStatusCaixa(status) {
+  if (status === 'aberta')   return 'Aberta';
+  if (status === 'expedida') return 'Expedida';
+  return 'Fechada';
+}
+
 async function verDetalheCaixa(id) {
   try {
     const c = await api('GET', '/caixas/' + id);
     document.getElementById('det2-titulo').textContent = c.codigo_barras || ('Caixa #' + c.id);
-    document.getElementById('det2-sub').textContent = c.responsavel_nome + ' · ' + fmtDT(c.criado_em) + ' · ' + (c.status === 'expedida' ? 'Expedida' : 'Fechada');
+    document.getElementById('det2-sub').textContent = labelStatusCaixa(c.status) + ' · aberta em ' + fmtDT(c.criado_em) +
+      (c.fechado_em ? ' · finalizada em ' + fmtDT(c.fechado_em) : '');
     document.getElementById('det2-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
       ${c.itens.map(i => `
@@ -749,14 +800,30 @@ async function verDetalheCaixa(id) {
             <span class="cc-itens-count">${i.quantidade}x</span>
           </div>
           <div class="cf-v" style="font-size:13px">${escapeHtml(i.descricao)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:5px">👤 ${escapeHtml(i.responsavel_nome || '—')} · ${fmtDT(i.criado_em)}</div>
         </div>
       `).join('')}
+      ${c.responsaveis && c.responsaveis.length ? `<div class="fg" style="margin-top:10px;margin-bottom:0"><label>Responsável(is)</label><div class="cf-v" style="font-size:13px;font-weight:400">${escapeHtml(c.responsaveis.join(', '))}</div></div>` : ''}
       ${c.observacoes ? `<div class="fg" style="margin-top:10px;margin-bottom:0"><label>Observações</label><div class="cf-v" style="font-size:13px;font-weight:400">${escapeHtml(c.observacoes)}</div></div>` : ''}
     `;
+    renderFooterCaixaDetalhe(c);
     abrirModal('mo-caixa-detalhe');
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+function renderFooterCaixaDetalhe(c) {
+  const footer = document.getElementById('det2-footer');
+  let botoes = '';
+  if (PERFIL === 'almoxarifado' && c.status === 'aberta') {
+    botoes += `<button class="btn btn-out" onclick="abrirAlterarCaixa(${c.id})">✏️ Alterar</button>`;
+    botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
+  }
+  if (c.status !== 'aberta') {
+    botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
+  }
+  footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>${botoes}`;
 }
 
 // ── NOVA CAIXA ─────────────────────────────────────────
@@ -812,10 +879,10 @@ function removeItemCaixa(idx) {
 }
 
 async function salvarCaixa() {
-  const responsavel_nome = document.getElementById('cx-responsavel').value.trim();
+  const responsavel_nome = document.getElementById('cx-responsavel').value;
   const observacoes = document.getElementById('cx-obs').value.trim();
 
-  if (!responsavel_nome) { toast('Preencha o nome do responsável.', true); return; }
+  if (!responsavel_nome) { toast('Selecione o responsável.', true); return; }
 
   const itens = caixaItensAtuais
     .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0 }))
@@ -824,17 +891,164 @@ async function salvarCaixa() {
   if (!itens.length) { toast('Inclua ao menos um item válido na caixa.', true); return; }
 
   const btn = document.getElementById('btn-salvar-caixa');
-  btn.disabled = true; btn.textContent = 'Fechando caixa...';
+  btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    const data = await api('POST', '/caixas', { responsavel_nome, observacoes: observacoes || null, itens });
+    await api('POST', '/caixas', { responsavel_nome, observacoes: observacoes || null, itens });
+    toast('Caixa salva. Use "Finalizar" quando estiver pronta.');
     fecharModal('mo-caixa');
-    ultimaCaixaGerada = data;
-    mostrarResultadoCaixa(data.codigo_barras);
-    carregarCaixas();
+    carregarCaixas('lista-caixas-almox');
   } catch (e) {
     toast(e.message, true);
   } finally {
-    btn.disabled = false; btn.textContent = 'Fechar Caixa e Gerar Código';
+    btn.disabled = false; btn.textContent = 'Salvar';
+  }
+}
+
+// ── ALTERAR CAIXA (adicionar novos itens a uma caixa aberta) ──
+let alterandoCaixaId = null;
+let novosItensAlterar = [];
+
+async function abrirAlterarCaixa(id) {
+  try {
+    const c = await api('GET', '/caixas/' + id);
+    alterandoCaixaId = id;
+    document.getElementById('alt-sub').textContent =
+      (c.codigo_barras || ('Caixa #' + c.id)) + ' — os itens já cadastrados estão listados abaixo; adicione os novos.';
+    document.getElementById('alt-responsavel').value = '';
+    document.getElementById('alt-itens-existentes').innerHTML = `
+      <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
+      ${c.itens.map(i => `
+        <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
+            <span class="cc-itens-count">${i.quantidade}x</span>
+          </div>
+          <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">👤 ${escapeHtml(i.responsavel_nome || '—')}</div>
+        </div>
+      `).join('')}
+    `;
+    novosItensAlterar = [{ codigo_item: '', descricao: '', quantidade: 1 }];
+    renderItensAlterar();
+    fecharModal('mo-caixa-detalhe');
+    abrirModal('mo-caixa-alterar');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function renderItensAlterar() {
+  const el = document.getElementById('mat-list-alterar');
+  el.innerHTML = novosItensAlterar.map((it, idx) => `
+    <div class="mat-row">
+      <div class="mat-row-top">
+        <span class="mat-row-num">Novo item ${idx + 1}</span>
+        ${novosItensAlterar.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemAlterar(${idx})" title="Remover item">×</button>` : ''}
+      </div>
+      <div class="fg" style="margin-bottom:8px">
+        <label>Código do item *</label>
+        <div class="mat-cod-row">
+          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItemAlterar(${idx},'codigo_item',this.value)">
+          <button type="button" class="btn-cam" onclick="abrirScanner('alterar',${idx})" title="Escanear código de barras">📷</button>
+        </div>
+      </div>
+      <div class="mat-fr">
+        <div class="fg" style="margin-bottom:0">
+          <label>Descrição *</label>
+          <input placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemAlterar(${idx},'descricao',this.value)">
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label>Quantidade *</label>
+          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemAlterar(${idx},'quantidade',this.value)">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function atualizaItemAlterar(idx, campo, valor) {
+  novosItensAlterar[idx][campo] = valor;
+}
+
+function addItemAlterar() {
+  novosItensAlterar.push({ codigo_item: '', descricao: '', quantidade: 1 });
+  renderItensAlterar();
+}
+
+function removeItemAlterar(idx) {
+  novosItensAlterar.splice(idx, 1);
+  renderItensAlterar();
+}
+
+async function salvarAlteracaoCaixa() {
+  const responsavel_nome = document.getElementById('alt-responsavel').value;
+  if (!responsavel_nome) { toast('Selecione o novo responsável.', true); return; }
+
+  const itens = novosItensAlterar
+    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0 }))
+    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
+
+  if (!itens.length) { toast('Inclua ao menos um novo item.', true); return; }
+
+  const btn = document.getElementById('btn-salvar-alterar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const data = await api('POST', `/caixas/${alterandoCaixaId}/itens`, { responsavel_nome, itens });
+    toast(data.mensagem || 'Itens adicionados.');
+    fecharModal('mo-caixa-alterar');
+    carregarCaixas('lista-caixas-almox');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar Alteração';
+  }
+}
+
+// ── FINALIZAR CAIXA ────────────────────────────────────
+async function finalizarCaixa(id) {
+  if (!confirm('Finalizar esta caixa? Depois de finalizada não será mais possível adicionar itens.')) return;
+  try {
+    const data = await api('POST', `/caixas/${id}/finalizar`, {});
+    fecharModal('mo-caixa-detalhe');
+    ultimaCaixaGerada = data;
+    mostrarResultadoCaixa(data.codigo_barras);
+    carregarCaixas('lista-caixas-almox');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── ROMANEIO (PDF) ─────────────────────────────────────
+// Não usa o helper api() porque a resposta é um PDF binário, não JSON.
+async function gerarRomaneio(id) {
+  const btn = document.getElementById('btn-romaneio-' + id);
+  const textoOriginal = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
+  try {
+    const resp = await fetch(API + '/caixas/' + id + '/romaneio', {
+      method: 'POST',
+      headers: TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {},
+    });
+    if (!resp.ok) {
+      let msg = 'Erro ao gerar romaneio.';
+      try { const data = await resp.json(); msg = data.erro || msg; } catch {}
+      throw new Error(msg);
+    }
+    const emailOk = resp.headers.get('X-Email-Enviado') === 'true';
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `romaneio-caixa-${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(emailOk ? 'Romaneio gerado e enviado por e-mail.' : 'Romaneio gerado, mas o envio por e-mail falhou.', !emailOk);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
   }
 }
 
@@ -946,8 +1160,9 @@ async function salvarCarregamento() {
 
 // ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
 // tipo: 'carregamento' (pode ser um item avulso OU o código de uma
-// caixa inteira, que expande em N itens) ou 'caixa' (sempre um item
-// avulso sendo cadastrado dentro da caixa).
+// caixa inteira, que expande em N itens), 'caixa' (item avulso sendo
+// cadastrado dentro de uma Nova Caixa) ou 'alterar' (item avulso
+// sendo adicionado a uma caixa já aberta, via "Alterar").
 async function abrirScanner(tipo, idx) {
   scannerContext = { tipo, idx };
   abrirModal('mo-scanner');
@@ -968,6 +1183,10 @@ async function abrirScanner(tipo, idx) {
         if (ctx.tipo === 'caixa') {
           atualizaItemCaixa(ctx.idx, 'codigo_item', decodedText);
           renderItensCaixa();
+          toast('Código lido: ' + decodedText);
+        } else if (ctx.tipo === 'alterar') {
+          atualizaItemAlterar(ctx.idx, 'codigo_item', decodedText);
+          renderItensAlterar();
           toast('Código lido: ' + decodedText);
         } else {
           processarCodigoCarregamento(ctx.idx, decodedText);

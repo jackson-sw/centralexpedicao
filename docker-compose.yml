@@ -27,6 +27,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER}
+      ROMANEIO_EMAIL_TO: ${ROMANEIO_EMAIL_TO:-jackson.weber@burntech.com.br}
     depends_on:
       db:
         condition: service_healthy

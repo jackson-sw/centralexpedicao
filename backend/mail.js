@@ -1,10 +1,8 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Transporter SMTP já configurado e pronto para uso.
-// Nenhuma rota dispara e-mail automaticamente ainda — fica disponível
-// para quando notificações (ex.: novo carregamento registrado) forem
-// solicitadas em uma próxima etapa.
+// Transporter SMTP — usado hoje pelo envio do romaneio da caixa
+// (backend/routes/caixas.js) e disponível para futuras notificações.
 const transporter = nodemailer.createTransport({
   host:   process.env.MAIL_SERVER,
   port:   parseInt(process.env.MAIL_PORT) || 587,
@@ -17,4 +15,16 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false },
 });
 
-module.exports = transporter;
+// Helper genérico de envio, usado pelas rotas da API.
+// attachments segue o formato do Nodemailer: [{ filename, content, contentType }]
+async function enviarEmail({ to, subject, html, attachments }) {
+  return transporter.sendMail({
+    from: process.env.MAIL_DEFAULT_SENDER,
+    to,
+    subject,
+    html,
+    attachments,
+  });
+}
+
+module.exports = { transporter, enviarEmail };

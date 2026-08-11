@@ -34,20 +34,22 @@ CREATE TABLE carregamentos (
 
 -- ------------------------------------------------------------
 -- Tabela: caixas
--- Uma caixa é montada no almoxarifado com vários itens pequenos.
--- Ao ser salva, já nasce "fechada" e ganha um código de barras
--- próprio (gerado a partir do id), pronto para ser impresso e
--- colado na caixa física. Quando essa caixa é lida dentro de um
--- carregamento, o status muda para "expedida".
+-- Uma caixa é aberta no almoxarifado e pode ser preenchida aos
+-- poucos, por mais de um responsável, enquanto estiver "aberta".
+-- Ao ser finalizada ("Finalizar"), passa para "fechada", grava
+-- fechado_em e ganha um código de barras próprio (gerado a partir
+-- do id), pronto para impressão. Quando essa caixa é lida dentro
+-- de um carregamento, o status muda para "expedida".
 -- ------------------------------------------------------------
 CREATE TABLE caixas (
   id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   codigo_barras     VARCHAR(30)  NULL,
-  status            ENUM('fechada', 'expedida') NOT NULL DEFAULT 'fechada',
+  status            ENUM('aberta', 'fechada', 'expedida') NOT NULL DEFAULT 'aberta',
   responsavel_nome  VARCHAR(150) NOT NULL,
   observacoes       VARCHAR(500) NULL,
   criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'almoxarifado',
   criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fechado_em        DATETIME NULL,
   expedido_em       DATETIME NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_caixas_codigo_barras (codigo_barras),
@@ -58,16 +60,19 @@ CREATE TABLE caixas (
 -- ------------------------------------------------------------
 -- Tabela: caixa_itens
 -- Relação um-para-muitos: cada caixa contém N materiais pequenos,
--- cada um com seu próprio código de barras individual.
+-- cada um com seu próprio código de barras individual. Guarda quem
+-- (responsavel_nome) adicionou cada item — uma caixa "aberta" pode
+-- receber itens de mais de um responsável ao longo do tempo.
 -- ------------------------------------------------------------
 CREATE TABLE caixa_itens (
-  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  caixa_id    INT UNSIGNED NOT NULL,
-  codigo_item VARCHAR(100) NOT NULL,
-  descricao   VARCHAR(255) NOT NULL,
-  quantidade  DECIMAL(10,2) NOT NULL DEFAULT 1.00,
-  ordem       SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  caixa_id         INT UNSIGNED NOT NULL,
+  codigo_item      VARCHAR(100) NOT NULL,
+  descricao        VARCHAR(255) NOT NULL,
+  quantidade       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+  responsavel_nome VARCHAR(150) NOT NULL,
+  ordem            SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  criado_em        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_caixa_itens_caixa_id (caixa_id),
   KEY idx_caixa_itens_codigo_item (codigo_item),
@@ -120,6 +125,7 @@ SELECT
   c.observacoes,
   c.criado_por_perfil,
   c.criado_em,
+  c.fechado_em,
   c.expedido_em,
   COUNT(ci.id)                    AS total_itens,
   COALESCE(SUM(ci.quantidade), 0) AS quantidade_total

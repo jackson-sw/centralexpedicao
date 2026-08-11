@@ -13,7 +13,12 @@ const app  = express();
 const PORT = process.env.PORT || 3002;
 
 // ── Middlewares globais ───────────────────────────────────────
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  // Permite que o frontend leia o cabeçalho customizado que informa
+  // se o e-mail do romaneio foi enviado com sucesso (ver POST /api/caixas/:id/romaneio).
+  exposedHeaders: ['X-Email-Enviado'],
+}));
 app.use(express.json());
 
 // Rate limit geral

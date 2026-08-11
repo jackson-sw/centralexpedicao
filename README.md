@@ -4,7 +4,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 
 ## Arquitetura
 
-- `backend/` — API REST em Express (Node.js, CommonJS, `mysql2/promise`). Ponto de entrada: `backend/server.js`.
+- `backend/` — API REST em Express (Node.js, CommonJS, `mysql2/promise`). Ponto de entrada: `backend/server.js`. Usa `pdfkit` para gerar o romaneio em PDF de cada caixa e `nodemailer` (`backend/mail.js`) para enviá-lo por e-mail.
 - `frontend/index.html` — frontend inteiro em um único arquivo (CSS e JS inline, sem framework, sem bundler). Usa a biblioteca `html5-qrcode` (via CDN) para leitura de código de barras pela câmera e `JsBarcode` (via CDN) para gerar o código de barras da caixa.
 - `frontend/admin.html` — painel administrativo separado (rota `/admin`), com login próprio, para cadastro de itens/materiais (código + descrição).
 - `frontend/manifest.json` + `frontend/service-worker.js` — configuração PWA (instalável, com cache do app shell).
@@ -18,7 +18,7 @@ O backend serve o frontend estaticamente — em produção tudo roda em um únic
 Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardado em `backend/.env` (mesmo modelo usado pelo perfil "Central Profissional" do Central Logística):
 
 - **Expedição** (senha padrão: `exp!2027`) — vê o histórico de carregamentos (e, somente leitura, o de caixas) e pode registrar novos carregamentos.
-- **Almoxarifado** (senha padrão: `Almox0987`) — monta e fecha as caixas (função "Nova Caixa"): move os itens pequenos do almoxarifado para o pátio da expedição e gera o código de barras da caixa.
+- **Almoxarifado** (senha padrão: `Almox0987`) — monta, altera e finaliza as caixas (ver [Fluxo de caixas](#fluxo-de-caixas) abaixo): move os itens pequenos do almoxarifado para o pátio da expedição.
 - **Em Campo** (senha padrão: `emcampo!26`) — login funcional, mas por enquanto exibe uma tela "em breve" (funcionalidade ainda não definida).
 
 Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` em `backend/.env`:
@@ -28,6 +28,18 @@ node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
 ```
 
 Existe ainda um terceiro perfil, **Admin** (senha padrão: `admin!2027`), exclusivo do painel administrativo em `/admin` — não aparece na tela de login do app, tem sua própria página e usa `ADMIN_PASSWORD_HASH` no `.env`. Diferente dos perfis Expedição/Em Campo, o token do admin não fica salvo no navegador (`localStorage`) — é preciso logar a cada acesso ao painel, por segurança.
+
+## Fluxo de caixas
+
+Uma caixa passa por três estados: **aberta → fechada → expedida**.
+
+1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens. Ela nasce **aberta** e ainda não tem código de barras.
+2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável do Almoxarifado pode adicionar mais itens. Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
+3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens.
+4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_EMAIL_TO`.
+5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
+
+Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/constants.js` e replicada no `<select>` do frontend): **Kerllon Pereira**, **Léo Neves** e **Filipe Luchtenberg**.
 
 ## Painel Administrativo (`/admin`)
 
@@ -116,19 +128,19 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_EMAIL_TO` — ver `backend/.env.example`.
+
+As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas).
 
 ## Atualizando um banco já existente
 
-Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql` (sem o perfil Almoxarifado), rode manualmente o script incremental:
+Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql`, rode manualmente os scripts incrementais que ainda não foram aplicados, na ordem:
 
 ```bash
-mysql -u root -p burntech_expedicao < alter_almoxarifado.sql
+mysql -u root -p burntech_expedicao < alter_almoxarifado.sql            # perfil Almoxarifado
+mysql -u root -p burntech_expedicao < alter_itens_materiais_quantidade.sql  # campo Quantidade no catálogo
+mysql -u root -p burntech_expedicao < alter_caixas_workflow.sql         # fluxo aberta/fechada + responsável por item
 ```
-
-Ele adiciona `'almoxarifado'` como valor válido de `criado_por_perfil` em `caixas` e `carregamentos`.
-
-As configurações SMTP já estão prontas em `backend/mail.js` (transporter configurado), mas nenhuma rota dispara e-mail automaticamente ainda — fica pronto para quando uma notificação (ex.: novo carregamento registrado) for solicitada.
 
 ## Próximos passos (fora do escopo desta primeira versão)
 
