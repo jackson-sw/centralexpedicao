@@ -1161,7 +1161,7 @@ function atualizaItem(idx, campo, valor) {
   itensAtuais[idx][campo] = valor;
   // Se o código foi editado manualmente, o item deixa de ser tratado
   // como proveniente automaticamente de uma caixa.
-  if (campo === 'codigo_item') itensAtuais[idx].caixa_id = null;
+  if (campo === 'codigo_item') { itensAtuais[idx].caixa_id = null; itensAtuais[idx].caixa_item_id = null; }
 }
 
 function addItemRow() {
@@ -1184,7 +1184,7 @@ async function salvarCarregamento() {
     toast('Preencha responsável, projeto, placa e cidade de destino.', true); return;
   }
   const itens = itensAtuais
-    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null }))
+    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null, caixa_item_id: i.caixa_item_id || null }))
     .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
 
   if (!itens.length) { toast('Inclua ao menos um item válido na lista de materiais.', true); return; }
@@ -1262,6 +1262,7 @@ async function processarCodigoCarregamento(idx, codigo) {
       descricao: i.descricao,
       quantidade: i.quantidade,
       caixa_id: caixa.id,
+      caixa_item_id: i.id,
       caixa_codigo: caixa.codigo_barras,
     }));
     itensAtuais.splice(idx, 1, ...(novos.length ? novos : [{ codigo_item: codigo, descricao: '', quantidade: 1 }]));

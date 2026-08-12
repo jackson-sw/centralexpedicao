@@ -95,6 +95,7 @@ CREATE TABLE carregamento_itens (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   carregamento_id  INT UNSIGNED NOT NULL,
   caixa_id         INT UNSIGNED NULL,
+  caixa_item_id    INT UNSIGNED NULL,
   codigo_item      VARCHAR(100) NOT NULL,
   descricao        VARCHAR(255) NOT NULL,
   quantidade       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
@@ -104,12 +105,17 @@ CREATE TABLE carregamento_itens (
   KEY idx_itens_carregamento_id (carregamento_id),
   KEY idx_itens_codigo_item (codigo_item),
   KEY idx_itens_caixa_id (caixa_id),
+  KEY idx_itens_caixa_item_id (caixa_item_id),
   CONSTRAINT fk_itens_carregamento
     FOREIGN KEY (carregamento_id) REFERENCES carregamentos(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
   CONSTRAINT fk_itens_caixa
     FOREIGN KEY (caixa_id) REFERENCES caixas(id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_itens_caixa_item
+    FOREIGN KEY (caixa_item_id) REFERENCES caixa_itens(id)
     ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

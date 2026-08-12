@@ -62,7 +62,7 @@ function gerarRomaneioCarregamentoPDF({ carregamento, itens }) {
     }
     y += 14;
 
-    y = desenharTabelaItens(doc, { marginX, contentRight, y, itens, responsavel: carregamento.responsavel_nome });
+    y = desenharTabelaItens(doc, { marginX, contentRight, y, itens });
 
     y += 16;
     const totalItens = itens.length;
@@ -94,7 +94,7 @@ function desenharCabecalho(doc, pageWidth, carregamento) {
     .text('#' + carregamento.numero_projeto, 0, 56, { width: pageWidth - 40, align: 'right' });
 }
 
-function desenharTabelaItens(doc, { marginX, contentRight, y, itens, responsavel }) {
+function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
   // Larguras fixas (código, descrição, qtd, origem) — o que sobra vai para
   // a coluna Responsável, sempre até contentRight.
   const colCodigo    = marginX;
@@ -133,12 +133,15 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens, responsavel
     // Item avulso (sem caixa_id) foi escaneado/digitado diretamente pela
     // Expedição no momento do carregamento — não passou pelo Almoxarifado.
     const origem = item.caixa_codigo || 'Expedição';
+    // Para itens vindos de uma caixa, o responsável é quem colocou aquele
+    // item específico na caixa (não quem fez o carregamento) — resolvido
+    // na consulta (COALESCE(caixa_itens.responsavel_nome, carregamento.responsavel_nome)).
     doc.fillColor(TEXT);
     doc.text(item.codigo_item,           colCodigo + 6,    y + 5, { width: colDescricao - colCodigo - 10 });
     doc.text(item.descricao,             colDescricao + 6, y + 5, { width: colQtd - colDescricao - 10 });
     doc.text(fmtQtd(item.quantidade),    colQtd + 6,       y + 5, { width: colOrigem - colQtd - 10 });
     doc.text(origem,                     colOrigem + 6,    y + 5, { width: colResp - colOrigem - 10 });
-    doc.text(responsavel || '—',         colResp + 6,      y + 5, { width: contentRight - colResp - 10 });
+    doc.text(item.responsavel_item || '—', colResp + 6,    y + 5, { width: contentRight - colResp - 10 });
     y += rowH;
     doc.moveTo(marginX, y).lineTo(contentRight, y).strokeColor(BORDER).lineWidth(0.5).stroke();
   });

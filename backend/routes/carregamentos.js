@@ -77,12 +77,13 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
 
     for (let i = 0; i < itens.length; i++) {
       const caixaId = itens[i].caixa_id || null;
+      const caixaItemId = itens[i].caixa_item_id || null;
       if (caixaId) caixaIdsUsadas.add(caixaId);
 
       await conn.query(
-        `INSERT INTO carregamento_itens (carregamento_id, caixa_id, codigo_item, descricao, quantidade, ordem)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [carregamentoId, caixaId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, i + 1]
+        `INSERT INTO carregamento_itens (carregamento_id, caixa_id, caixa_item_id, codigo_item, descricao, quantidade, ordem)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [carregamentoId, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, i + 1]
       );
     }
 
@@ -117,10 +118,17 @@ router.post('/:id/romaneio', auth, async (req, res) => {
     const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
 
+    // O responsável de cada item é quem colocou aquele item específico
+    // na caixa (caixa_itens.responsavel_nome via caixa_item_id) — não o
+    // responsável pelo carregamento. Para itens avulsos (sem caixa),
+    // cai no responsável do próprio carregamento.
     const [itens] = await db.query(
-      `SELECT ci.*, cx.codigo_barras AS caixa_codigo
+      `SELECT ci.*, cx.codigo_barras AS caixa_codigo,
+              COALESCE(cxi.responsavel_nome, c.responsavel_nome) AS responsavel_item
        FROM carregamento_itens ci
        LEFT JOIN caixas cx ON cx.id = ci.caixa_id
+       LEFT JOIN caixa_itens cxi ON cxi.id = ci.caixa_item_id
+       JOIN carregamentos c ON c.id = ci.carregamento_id
        WHERE ci.carregamento_id = ?
        ORDER BY ci.ordem ASC, ci.id ASC`,
       [carregamento.id]
