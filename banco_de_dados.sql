@@ -146,6 +146,7 @@ SELECT
   c.tipo,
   c.responsavel_nome,
   c.numero_projeto,
+  c.placa,
   c.cidade_destino,
   c.observacoes,
   c.status,
