@@ -201,9 +201,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 .print-label-code{font-family:monospace;font-weight:800;font-size:4.8mm;letter-spacing:1mm;}
 #barcode-print{width:90mm;max-width:100%;height:auto;}
 @media print{
-  body *{visibility:hidden;}
-  #print-label-area, #print-label-area *{visibility:visible;}
-  #print-label-area{display:block;position:fixed;top:0;left:0;width:110mm;height:75mm;margin:0;}
+  /* display:none (em vez de visibility:hidden) remove o restante do app do
+     fluxo do documento — senão a altura total da página (login + app +
+     todos os modais) sobra além dos 75mm da etiqueta e o navegador imprime
+     uma segunda folha em branco para "caber" o conteúdo invisível. */
+  body > *:not(#print-label-area){display:none !important;}
+  #print-label-area{display:block !important;width:110mm;height:75mm;margin:0;}
 }
 
 /* ── TOAST ─────────────────────────────────────────── */
