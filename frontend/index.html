@@ -827,6 +827,7 @@ function renderFooterCaixaDetalhe(c) {
     botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
   }
   if (c.status !== 'aberta') {
+    botoes += `<button class="btn btn-out" onclick="reimprimirEtiquetaCaixa('${escapeAttr(c.codigo_barras)}')">🖨️ Reimprimir</button>`;
     botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
   }
   footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>${botoes}`;
@@ -1086,9 +1087,20 @@ function fecharResultadoCaixa() {
 
 function imprimirEtiquetaCaixa() {
   if (!ultimaCaixaGerada) return;
-  document.getElementById('print-label-code').textContent = ultimaCaixaGerada.codigo_barras;
+  imprimirEtiquetaPorCodigo(ultimaCaixaGerada.codigo_barras);
+}
+
+// Reimpressão da etiqueta de uma caixa já finalizada, a partir do
+// detalhe da caixa (útil quando a etiqueta original foi perdida/danificada).
+function reimprimirEtiquetaCaixa(codigo) {
+  if (!codigo) { toast('Esta caixa ainda não tem código de barras.', true); return; }
+  imprimirEtiquetaPorCodigo(codigo);
+}
+
+function imprimirEtiquetaPorCodigo(codigo) {
+  document.getElementById('print-label-code').textContent = codigo;
   try {
-    JsBarcode('#barcode-print', ultimaCaixaGerada.codigo_barras, { format: 'CODE128', width: 2.4, height: 80, displayValue: false, margin: 4 });
+    JsBarcode('#barcode-print', codigo, { format: 'CODE128', width: 2.4, height: 80, displayValue: false, margin: 4 });
   } catch (e) {}
   window.print();
 }
