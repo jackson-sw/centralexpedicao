@@ -1248,26 +1248,26 @@ async function abrirScanner(tipo, idx) {
 }
 
 // Ao ler um código dentro do "Novo Carregamento", verifica se ele
-// corresponde a uma caixa fechada no almoxarifado. Se for, expande
-// automaticamente a linha lida em N linhas — uma para cada item da
-// caixa. Se não for (item avulso normal), só preenche o campo.
+// corresponde a uma caixa fechada no almoxarifado. Se for, adiciona
+// UMA única linha representando a caixa inteira (não abre os itens
+// individuais dela — isso fica só no controle do Almoxarifado). Se
+// não for (item avulso normal), só preenche o campo.
 async function processarCodigoCarregamento(idx, codigo) {
   try {
     const caixa = await api('GET', '/caixas/codigo/' + encodeURIComponent(codigo));
     if (caixa.status === 'expedida') {
       toast('Atenção: esta caixa já foi expedida em outro carregamento.', true);
     }
-    const novos = caixa.itens.map(i => ({
-      codigo_item: i.codigo_item,
-      descricao: i.descricao,
-      quantidade: i.quantidade,
+    itensAtuais.splice(idx, 1, {
+      codigo_item: caixa.codigo_barras,
+      descricao: 'Caixa contendo itens',
+      quantidade: 1,
       caixa_id: caixa.id,
-      caixa_item_id: i.id,
+      caixa_item_id: null,
       caixa_codigo: caixa.codigo_barras,
-    }));
-    itensAtuais.splice(idx, 1, ...(novos.length ? novos : [{ codigo_item: codigo, descricao: '', quantidade: 1 }]));
+    });
     renderItens();
-    toast(`Caixa ${caixa.codigo_barras}: ${novos.length} ${novos.length === 1 ? 'item adicionado' : 'itens adicionados'}.`);
+    toast(`Caixa ${caixa.codigo_barras} adicionada ao carregamento.`);
   } catch (e) {
     // Código não corresponde a nenhuma caixa — trata como item avulso normal.
     atualizaItem(idx, 'codigo_item', codigo);

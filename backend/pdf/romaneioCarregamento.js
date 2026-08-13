@@ -132,16 +132,18 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
     }
     // Item avulso (sem caixa_id) foi escaneado/digitado diretamente pela
     // Expedição no momento do carregamento — não passou pelo Almoxarifado.
-    const origem = item.caixa_codigo || 'Expedição';
-    // Para itens vindos de uma caixa, o responsável é quem colocou aquele
-    // item específico na caixa (não quem fez o carregamento) — resolvido
-    // na consulta (COALESCE(caixa_itens.responsavel_nome, carregamento.responsavel_nome)).
+    // Linha representando uma caixa inteira (caixa_id preenchido, sem
+    // caixa_codigo individual resolvido pela consulta) fica com Origem e
+    // Responsável em branco — o controle de quem montou a caixa é interno
+    // ao Almoxarifado. Só o formato antigo (item expandido individualmente
+    // de uma caixa) mostra o código da caixa aqui.
+    const origem = item.caixa_id ? (item.caixa_codigo || '') : 'Expedição';
     doc.fillColor(TEXT);
     doc.text(item.codigo_item,           colCodigo + 6,    y + 5, { width: colDescricao - colCodigo - 10 });
     doc.text(item.descricao,             colDescricao + 6, y + 5, { width: colQtd - colDescricao - 10 });
     doc.text(fmtQtd(item.quantidade),    colQtd + 6,       y + 5, { width: colOrigem - colQtd - 10 });
     doc.text(origem,                     colOrigem + 6,    y + 5, { width: colResp - colOrigem - 10 });
-    doc.text(item.responsavel_item || '—', colResp + 6,    y + 5, { width: contentRight - colResp - 10 });
+    doc.text(item.responsavel_item || '', colResp + 6,     y + 5, { width: contentRight - colResp - 10 });
     y += rowH;
     doc.moveTo(marginX, y).lineTo(contentRight, y).strokeColor(BORDER).lineWidth(0.5).stroke();
   });

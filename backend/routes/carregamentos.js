@@ -118,13 +118,25 @@ router.post('/:id/romaneio', auth, async (req, res) => {
     const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
 
-    // O responsável de cada item é quem colocou aquele item específico
-    // na caixa (caixa_itens.responsavel_nome via caixa_item_id) — não o
-    // responsável pelo carregamento. Para itens avulsos (sem caixa),
-    // cai no responsável do próprio carregamento.
+    // Responsável de cada linha:
+    //  - item herdado de uma caixa já aberta (caixa_item_id preenchido —
+    //    formato antigo, itens expandidos individualmente): quem colocou
+    //    aquele item específico na caixa;
+    //  - linha representando a caixa inteira (caixa_id preenchido, sem
+    //    caixa_item_id — formato atual): em branco, o Almoxarifado já
+    //    controla os responsáveis internamente por caixa;
+    //  - item avulso (sem caixa nenhuma): responsável do carregamento.
+    // Origem segue a mesma lógica: código da caixa só quando o item veio
+    // individualmente dela; em branco na linha-resumo da caixa; "Expedição"
+    // para avulso.
     const [itens] = await db.query(
-      `SELECT ci.*, cx.codigo_barras AS caixa_codigo,
-              COALESCE(cxi.responsavel_nome, c.responsavel_nome) AS responsavel_item
+      `SELECT ci.*,
+              CASE WHEN ci.caixa_item_id IS NOT NULL THEN cx.codigo_barras
+                   WHEN ci.caixa_id IS NOT NULL THEN NULL
+                   ELSE NULL END AS caixa_codigo,
+              CASE WHEN ci.caixa_item_id IS NOT NULL THEN cxi.responsavel_nome
+                   WHEN ci.caixa_id IS NOT NULL THEN NULL
+                   ELSE c.responsavel_nome END AS responsavel_item
        FROM carregamento_itens ci
        LEFT JOIN caixas cx ON cx.id = ci.caixa_id
        LEFT JOIN caixa_itens cxi ON cxi.id = ci.caixa_item_id
