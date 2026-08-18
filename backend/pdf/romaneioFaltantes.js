@@ -107,11 +107,13 @@ function desenharCabecalho(doc, pageWidth, carregamento) {
 
 function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
   const colCodigo    = marginX;
-  const colDescricao = colCodigo + 90;
-  const colQtd       = colDescricao + 280;
+  const colDescricao = colCodigo + 110;
+  const colQtd       = colDescricao + 260;
   const colOrigem    = colQtd + 55;
   const rowH = 20;
   const headerH = 22;
+  const larguraCodigo    = colDescricao - colCodigo - 10;
+  const larguraDescricao = colQtd - colDescricao - 10;
 
   function cabecalhoTabela(yy) {
     doc.rect(marginX, yy, contentRight - marginX, headerH).fill('#f3f4f6');
@@ -128,22 +130,29 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
 
   doc.font('Helvetica').fontSize(9);
   itens.forEach((item, idx) => {
-    if (y + rowH > doc.page.height - 90) {
+    // Código ou descrição longos podem quebrar em mais de uma linha — a
+    // altura da linha da tabela precisa acompanhar isso, senão o traço
+    // divisório é desenhado por cima do texto que "vazou" da linha.
+    const alturaCodigo    = doc.heightOfString(item.codigo_item || '', { width: larguraCodigo });
+    const alturaDescricao = doc.heightOfString(item.descricao || '',   { width: larguraDescricao });
+    const alturaLinha = Math.max(rowH, Math.max(alturaCodigo, alturaDescricao) + 10);
+
+    if (y + alturaLinha > doc.page.height - 90) {
       doc.addPage();
       y = 40;
       y = cabecalhoTabela(y);
       doc.moveTo(marginX, y).lineTo(contentRight, y).strokeColor(BORDER).lineWidth(0.75).stroke();
     }
     if (idx % 2 === 1) {
-      doc.rect(marginX, y, contentRight - marginX, rowH).fill(ZEBRA);
+      doc.rect(marginX, y, contentRight - marginX, alturaLinha).fill(ZEBRA);
     }
     const origem = item.caixa_id ? (item.caixa_codigo || '') : 'Expedição';
     doc.fillColor(TEXT);
-    doc.text(item.codigo_item,        colCodigo + 6,    y + 5, { width: colDescricao - colCodigo - 10 });
-    doc.text(item.descricao,          colDescricao + 6, y + 5, { width: colQtd - colDescricao - 10 });
+    doc.text(item.codigo_item,        colCodigo + 6,    y + 5, { width: larguraCodigo });
+    doc.text(item.descricao,          colDescricao + 6, y + 5, { width: larguraDescricao });
     doc.text(fmtQtd(item.quantidade), colQtd + 6,       y + 5, { width: colOrigem - colQtd - 10 });
     doc.text(origem,                  colOrigem + 6,    y + 5, { width: contentRight - colOrigem - 10 });
-    y += rowH;
+    y += alturaLinha;
     doc.moveTo(marginX, y).lineTo(contentRight, y).strokeColor(BORDER).lineWidth(0.5).stroke();
   });
 
