@@ -640,8 +640,6 @@ let abaHistoricoAtual = 'carregamentos';
 let campoCache = [];
 let desembarqueCarregamentoId = null;
 let desembarqueItens = [];
-let ultimoCodigoScanDesemb = null;
-let ultimoScanDesembEm = 0;
 
 // ── HELPER API ────────────────────────────────────────
 async function api(method, path, body) {
@@ -992,25 +990,8 @@ async function gerarRomaneioFaltantes() {
   );
 }
 
-// Scanner contínuo: diferente do abrirScanner(tipo, idx) genérico
-// (que fecha após uma leitura), aqui a câmera continua ativa —
-// confere um item atrás do outro sem precisar reabrir o scanner a
-// cada leitura, prática essencial pra conferir uma carga inteira.
 async function abrirScannerDesembarque() {
-  ultimoCodigoScanDesemb = null;
-  ultimoScanDesembEm = 0;
   await abrirScanner('desembarque', null);
-}
-
-function processarCodigoScanDesembarque(codigo) {
-  // Enquanto o código continua no quadro da câmera, o html5-qrcode
-  // dispara o callback várias vezes seguidas — ignora repetições do
-  // mesmo código dentro de 1,5s pra não gerar toasts duplicados.
-  const agora = Date.now();
-  if (codigo === ultimoCodigoScanDesemb && agora - ultimoScanDesembEm < 1500) return;
-  ultimoCodigoScanDesemb = codigo;
-  ultimoScanDesembEm = agora;
-  confirmarCodigoDesembarque(codigo);
 }
 
 // ── CAIXAS (histórico) ────────────────────────────────
@@ -1475,9 +1456,10 @@ async function salvarCarregamento() {
 // caixa inteira, que expande em N itens), 'caixa' (item avulso sendo
 // cadastrado dentro de uma Nova Caixa), 'alterar' (item avulso sendo
 // adicionado a uma caixa já aberta, via "Alterar") ou 'desembarque'
-// (conferência no perfil Em Campo — diferente dos outros, NÃO fecha
-// o scanner a cada leitura, pra conferir vários itens em sequência
-// sem reabrir a câmera toda hora).
+// (conferência no perfil Em Campo). Fecha sempre após uma leitura —
+// no desembarque isso é proposital: dá pra ver a confirmação do item
+// antes de decidir escanear o próximo, evitando dúvida sobre se a
+// leitura realmente "pegou".
 async function abrirScanner(tipo, idx) {
   scannerContext = { tipo, idx };
   abrirModal('mo-scanner');
@@ -1494,10 +1476,6 @@ async function abrirScanner(tipo, idx) {
       { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
       (decodedText) => {
         const ctx = scannerContext;
-        if (ctx.tipo === 'desembarque') {
-          processarCodigoScanDesembarque(decodedText);
-          return;
-        }
         fecharScanner();
         if (ctx.tipo === 'caixa') {
           atualizaItemCaixa(ctx.idx, 'codigo_item', decodedText);
@@ -1509,6 +1487,8 @@ async function abrirScanner(tipo, idx) {
           renderItensAlterar();
           preencherDescricaoPorCodigo('alterar', ctx.idx);
           toast('Código lido: ' + decodedText);
+        } else if (ctx.tipo === 'desembarque') {
+          confirmarCodigoDesembarque(decodedText);
         } else {
           processarCodigoCarregamento(ctx.idx, decodedText);
         }
