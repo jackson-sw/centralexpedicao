@@ -188,25 +188,26 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 .scanner-fallback{padding:0 18px 18px;}
 
 /* ── ETIQUETA DE IMPRESSÃO (Nova Caixa) ──────────────
-   Tamanho fixo 110mm x 75mm — impressora de etiquetas. */
-@page{size:110mm 75mm;margin:0;}
+   Tamanho fixo 100mm x 70mm (10cm x 7cm) — impressora de etiquetas. */
+@page{size:100mm 70mm;margin:0;}
 #print-label-area{display:none;}
 .print-label{
-  width:110mm;height:75mm;box-sizing:border-box;
-  padding:6mm 8mm;display:flex;flex-direction:column;
+  width:100mm;height:70mm;box-sizing:border-box;
+  padding:5mm 6mm;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:3mm;
   text-align:center;overflow:hidden;
 }
 .print-label-brand{font-size:3.2mm;font-weight:800;letter-spacing:.3mm;line-height:1.3;}
 .print-label-code{font-family:monospace;font-weight:800;font-size:4.8mm;letter-spacing:1mm;}
-#barcode-print{width:90mm;max-width:100%;height:auto;}
+#barcode-print{width:82mm;max-width:100%;height:auto;}
 @media print{
   /* display:none (em vez de visibility:hidden) remove o restante do app do
      fluxo do documento — senão a altura total da página (login + app +
-     todos os modais) sobra além dos 75mm da etiqueta e o navegador imprime
-     uma segunda folha em branco para "caber" o conteúdo invisível. */
+     todos os modais) sobra além dos 70mm da etiqueta e o navegador imprime
+     uma segunda folha em branco (ou uma segunda etiqueta) para "caber" o
+     conteúdo invisível. */
   body > *:not(#print-label-area){display:none !important;}
-  #print-label-area{display:block !important;width:110mm;height:75mm;margin:0;}
+  #print-label-area{display:block !important;width:100mm;height:70mm;margin:0;}
 }
 
 /* ── TOAST ─────────────────────────────────────────── */
