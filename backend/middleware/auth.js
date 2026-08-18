@@ -31,6 +31,14 @@ function apenasAlmoxarifado(req, res, next) {
   next();
 }
 
+// Bloqueio: só o perfil Em Campo pode conferir itens no desembarque.
+function apenasEmCampo(req, res, next) {
+  if (req.usuario?.perfil !== 'em_campo') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Em Campo.' });
+  }
+  next();
+}
+
 // Bloqueio: só o perfil Admin (painel /admin) pode gerenciar o
 // catálogo de itens/materiais.
 function apenasAdmin(req, res, next) {
@@ -40,4 +48,4 @@ function apenasAdmin(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasAdmin };
+module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasEmCampo, apenasAdmin };

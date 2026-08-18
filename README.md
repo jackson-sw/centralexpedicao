@@ -19,7 +19,7 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 
 - **Expedição** (senha padrão: `exp!2027`) — vê o histórico de carregamentos (e, somente leitura, o de caixas) e pode registrar novos carregamentos.
 - **Almoxarifado** (senha padrão: `Almox0987`) — monta, altera e finaliza as caixas (ver [Fluxo de caixas](#fluxo-de-caixas) abaixo): move os itens pequenos do almoxarifado para o pátio da expedição.
-- **Em Campo** (senha padrão: `emcampo!26`) — login funcional, mas por enquanto exibe uma tela "em breve" (funcionalidade ainda não definida).
+- **Em Campo** (senha padrão: `emcampo!26`) — confere o desembarque dos carregamentos no destino (ver [Fluxo de desembarque](#fluxo-de-desembarque) abaixo).
 
 Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` em `backend/.env`:
 
@@ -40,6 +40,17 @@ Uma caixa passa por três estados: **aberta → fechada → expedida**.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
 Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/constants.js` e replicada no `<select>` do frontend): **Kerllon Pereira**, **Léo Neves** e **Filipe Luchtenberg**.
+
+## Fluxo de desembarque
+
+O perfil **Em Campo** lista todos os carregamentos (com busca por número de projeto no topo da tela) e confere, no destino, se os itens que saíram realmente chegaram.
+
+1. **Desembarque** — abre a tela de conferência de um carregamento: nome do responsável pelo desembarque, barra de progresso e a lista de itens daquele carregamento (cada linha é um item avulso ou uma caixa inteira, do jeito que foi carregada).
+2. **Conferência** — cada item pode ser confirmado de três formas: lendo o código de barras pela câmera (o scanner fica ativo continuamente, conferindo um item atrás do outro sem precisar reabrir a câmera a cada leitura), digitando o código no campo manual + Enter, ou tocando direto na linha do item (útil quando o código está ilegível). Tocar de novo desfaz a conferência.
+3. **Salvar** — fecha a tela de desembarque e grava o responsável e a data/hora. Se algum item não foi conferido, o sistema avisa quantos estão faltando mas **permite salvar mesmo assim** — o carregamento fica com status `parcial` em vez de `concluido`. É possível reabrir o desembarque depois e continuar de onde parou (nada é perdido ao fechar sem salvar).
+4. **Romaneio de Faltantes** — gera um PDF só com os itens ainda não conferidos (ou uma confirmação de que está tudo certo, se não faltar nada) e envia por e-mail para o(s) destinatário(s) em `ROMANEIO_EMAIL_TO` — disponível a qualquer momento durante a conferência, não precisa ter clicado Salvar antes.
+
+Cada card na lista do perfil Em Campo mostra o status do desembarque: **Pendente** (ninguém salvou ainda), **Parcial** (salvo, mas faltou item) ou **Concluído** (salvo com tudo conferido).
 
 ## Painel Administrativo (`/admin`)
 
@@ -164,10 +175,10 @@ mysql -u root -p burntech_expedicao < alter_carregamentos_placa.sql     # campo 
 mysql -u root -p burntech_expedicao < alter_view_carregamentos_placa.sql          # corrige view sem a coluna placa
 mysql -u root -p burntech_expedicao < alter_carregamento_itens_caixa_item_id.sql  # rastreia responsável por item no romaneio
 mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcional — remove a tabela local, não usada desde a integração com o ERP
+mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # fluxo de Desembarque (perfil Em Campo)
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)
 
-- Definir e implementar as funcionalidades do perfil "Em Campo".
 - Tela dedicada de "Novo Descarregamento" (a coluna `tipo` já existe no banco, pronta para isso).
 - Envio de e-mail de notificação ao registrar um carregamento.

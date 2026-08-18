@@ -117,6 +117,9 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .cc-badge.aberta{background:#dbeafe;color:#1d4ed8;}
 .cc-badge.fechada{background:#fef3c7;color:#92400e;}
 .cc-badge.expedida{background:#dcfce7;color:#166534;}
+.cc-badge.pendente{background:#f3f4f6;color:#6b7280;}
+.cc-badge.parcial{background:#fef3c7;color:#92400e;}
+.cc-badge.concluido{background:#dcfce7;color:#166534;}
 .cf{display:flex;gap:6px;margin-bottom:5px;font-size:13px;align-items:baseline;}
 .cf-l{color:var(--muted2);min-width:92px;flex-shrink:0;font-size:12px;}
 .cf-v{color:var(--text);font-weight:600;}
@@ -133,18 +136,29 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
+/* ── EM CAMPO (Desembarque) ────────────────────────── */
+.busca-inp{width:100%;margin-bottom:16px;}
+.desemb-progress{margin-bottom:16px;}
+.desemb-progress-bar{height:8px;background:#e9ebef;border-radius:5px;overflow:hidden;margin-bottom:6px;}
+.desemb-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--green),#15803d);border-radius:5px;transition:width .25s;}
+.desemb-progress-label{font-size:12px;color:var(--muted);font-weight:600;}
+.desemb-item{display:flex;align-items:center;gap:12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+.desemb-item:hover{border-color:var(--border2);}
+.desemb-item.ok{background:#f0fdf4;border-color:#bbf7d0;}
+.desemb-item-check{width:26px;height:26px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;transition:all .15s;}
+.desemb-item.ok .desemb-item-check{background:var(--green);border-color:var(--green);}
+.desemb-item-info{flex:1;min-width:0;}
+.desemb-item-cod{font-family:monospace;font-weight:700;font-size:13px;display:flex;justify-content:space-between;gap:8px;}
+.desemb-item.ok .desemb-item-cod{text-decoration:line-through;color:var(--muted);}
+.desemb-item-desc{font-size:12.5px;color:var(--muted);margin-top:2px;}
+.desemb-item-tag{font-size:10.5px;color:#92400e;background:#fef3c7;border-radius:5px;padding:2px 7px;margin-top:5px;display:inline-block;font-weight:600;}
+
 /* ── FAB (atalho para a ação principal de cada perfil) ─ */
 .fab-wrap{position:fixed;right:20px;bottom:calc(24px + var(--safe-bottom));z-index:40;display:flex;flex-direction:column;align-items:flex-end;gap:14px;}
 .fab{width:58px;height:58px;border-radius:50%;
   background:linear-gradient(145deg,var(--red),var(--red-dark));color:#fff;border:none;font-size:28px;font-weight:400;
   display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(192,57,43,.4);cursor:pointer;transition:transform .2s;flex-shrink:0;}
 .fab:active{transform:scale(.92);}
-
-/* ── PLACEHOLDER (Em Campo) ────────────────────────── */
-.placeholder-wrap{min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}
-.ph-icon{font-size:56px;margin-bottom:18px;}
-.ph-title{font-size:19px;font-weight:800;margin-bottom:8px;}
-.ph-sub{font-size:13.5px;color:var(--muted);max-width:320px;line-height:1.6;}
 
 /* ── MODAL ─────────────────────────────────────────── */
 .overlay{position:fixed;inset:0;background:rgba(15,15,20,.5);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
@@ -371,14 +385,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     </div>
   </div>
 
-  <!-- VIEW EM CAMPO (placeholder) -->
+  <!-- VIEW EM CAMPO (Desembarque) -->
   <div id="view-em-campo" style="display:none">
-    <div class="placeholder-wrap">
-      <div>
-        <div class="ph-icon">🚧</div>
-        <div class="ph-title">Funcionalidades em breve</div>
-        <div class="ph-sub">O perfil <strong>Em Campo</strong> ainda está em desenvolvimento. Novas funções serão liberadas aqui em breve.</div>
+    <div class="wrap">
+      <div class="summary">
+        <span class="ptitle">Desembarque</span>
       </div>
+      <input type="text" class="busca-inp" id="campo-busca" placeholder="🔍 Buscar por número de projeto..." oninput="filtrarCampo()">
+      <div id="lista-campo"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
     </div>
   </div>
 </div>
@@ -427,6 +441,45 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mb" id="det-body"></div>
     <div class="mf" id="det-footer">
       <button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DESEMBARQUE (Em Campo) -->
+<div class="overlay" id="mo-desembarque">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <div class="mt" id="desemb-titulo">Desembarque</div>
+        <div class="ms" id="desemb-sub"></div>
+      </div>
+      <button class="mx" onclick="fecharDesembarque()">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label>Responsável pelo desembarque *</label>
+        <input id="desemb-responsavel" placeholder="Nome de quem está descarregando">
+      </div>
+
+      <div class="desemb-progress">
+        <div class="desemb-progress-bar"><div class="desemb-progress-fill" id="desemb-progress-fill"></div></div>
+        <div class="desemb-progress-label" id="desemb-progress-label">0 de 0 itens conferidos</div>
+      </div>
+
+      <div class="fg">
+        <label>Ler ou digitar código do item</label>
+        <div class="mat-cod-row">
+          <input id="desemb-codigo-manual" placeholder="Digite o código e pressione Enter" onkeydown="if(event.key==='Enter')confirmarCodigoManual()">
+          <button type="button" class="btn-cam" onclick="abrirScannerDesembarque()" title="Escanear código de barras">📷</button>
+        </div>
+      </div>
+
+      <div class="fg" style="margin-top:6px"><label>Itens do carregamento</label></div>
+      <div id="desemb-lista-itens"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" id="btn-romaneio-faltantes" onclick="gerarRomaneioFaltantes()">🧾 Romaneio de Faltantes</button>
+      <button class="btn btn-red" id="btn-salvar-desembarque" onclick="salvarDesembarque()">Salvar</button>
     </div>
   </div>
 </div>
@@ -584,6 +637,11 @@ let carregamentosCache = [];
 let caixasCache = [];
 let ultimaCaixaGerada = null;
 let abaHistoricoAtual = 'carregamentos';
+let campoCache = [];
+let desembarqueCarregamentoId = null;
+let desembarqueItens = [];
+let ultimoCodigoScanDesemb = null;
+let ultimoScanDesembEm = 0;
 
 // ── HELPER API ────────────────────────────────────────
 async function api(method, path, body) {
@@ -664,6 +722,8 @@ function boot() {
     roleEl.textContent = 'Em Campo';
     roleEl.className = 'hrole r-campo';
     document.getElementById('view-em-campo').style.display = 'block';
+    carregarCampo();
+    pollTimer = setInterval(carregarCampo, 25000);
   }
 }
 
@@ -748,6 +808,209 @@ function trocarAbaHistorico(tab) {
   document.getElementById('tab-caixas').classList.toggle('on', tab === 'caixas');
   document.getElementById('lista-carregamentos').style.display = tab === 'carregamentos' ? 'block' : 'none';
   document.getElementById('lista-caixas').style.display = tab === 'caixas' ? 'block' : 'none';
+}
+
+// ── EM CAMPO — DESEMBARQUE ──────────────────────────────
+// Lista todos os carregamentos (igual ao histórico da Expedição),
+// mas cada card tem um botão "Desembarque" em vez de abrir um
+// detalhe só de leitura. A busca no topo filtra pelo número do
+// projeto, direto no que já foi carregado (sem round-trip ao servidor
+// a cada tecla).
+async function carregarCampo() {
+  try {
+    const lista = await api('GET', '/carregamentos');
+    campoCache = lista;
+    filtrarCampo();
+  } catch (e) {
+    if (!campoCache.length) {
+      document.getElementById('lista-campo').innerHTML =
+        `<div class="empty-box"><div class="empty-icon">⚠️</div><div class="empty-title">Não foi possível carregar</div><div class="empty-sub">${e.message}</div></div>`;
+    }
+  }
+}
+
+function filtrarCampo() {
+  const busca = document.getElementById('campo-busca').value.toLowerCase().trim();
+  const lista = !busca
+    ? campoCache
+    : campoCache.filter(c => String(c.numero_projeto).toLowerCase().includes(busca));
+  renderListaCampo(lista);
+}
+
+function labelDesembarqueStatus(status) {
+  return { pendente: 'Pendente', parcial: 'Parcial', concluido: 'Concluído' }[status] || 'Pendente';
+}
+
+function renderListaCampo(lista) {
+  const el = document.getElementById('lista-campo');
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-box"><div class="empty-icon">📭</div><div class="empty-title">Nenhum carregamento encontrado</div><div class="empty-sub">Tente outro número de projeto ou aguarde um novo carregamento.</div></div>`;
+    return;
+  }
+  el.innerHTML = lista.map(c => `
+    <div class="ccard ${c.tipo}" style="cursor:default">
+      <div class="cc-top">
+        <div>
+          <div class="cc-proj">#${c.numero_projeto}</div>
+          <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
+        </div>
+        <span class="cc-badge ${c.desembarque_status || 'pendente'}">${labelDesembarqueStatus(c.desembarque_status)}</span>
+      </div>
+      <div class="cf"><span class="cf-l">Placa</span><span class="cf-v">${escapeHtml(c.placa)}</span></div>
+      <div class="cf"><span class="cf-l">Destino</span><span class="cf-v">${escapeHtml(c.cidade_destino)}</span></div>
+      <div class="cc-foot">
+        <span class="cc-time">${fmtDT(c.criado_em)}</span>
+        <span class="cc-itens-count">${c.total_itens_desembarcados || 0} de ${c.total_itens} ${c.total_itens == 1 ? 'item' : 'itens'} conferidos</span>
+      </div>
+      <button class="btn btn-blue" style="width:100%;justify-content:center;margin-top:12px" onclick="abrirDesembarque(${c.id})">🔽 Desembarque</button>
+    </div>
+  `).join('');
+}
+
+async function abrirDesembarque(id) {
+  try {
+    const c = await api('GET', '/carregamentos/' + id);
+    desembarqueCarregamentoId = id;
+    desembarqueItens = c.itens;
+    document.getElementById('desemb-titulo').textContent = '#' + c.numero_projeto + ' — ' + c.cidade_destino;
+    document.getElementById('desemb-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
+    document.getElementById('desemb-responsavel').value = c.desembarque_responsavel || '';
+    document.getElementById('desemb-codigo-manual').value = '';
+    renderItensDesembarque();
+    abrirModal('mo-desembarque');
+    setTimeout(() => document.getElementById('desemb-codigo-manual').focus(), 150);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function fecharDesembarque() {
+  fecharModal('mo-desembarque');
+  carregarCampo();
+}
+
+function renderItensDesembarque() {
+  const el = document.getElementById('desemb-lista-itens');
+  el.innerHTML = desembarqueItens.map(i => `
+    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''}" onclick="toggleItemDesembarque(${i.id})">
+      <div class="desemb-item-check">${i.desembarcado_em ? '✓' : ''}</div>
+      <div class="desemb-item-info">
+        <div class="desemb-item-cod">
+          <span>${escapeHtml(i.codigo_item)}</span>
+          <span class="cc-itens-count">${fmtQtdCampo(i.quantidade)}x</span>
+        </div>
+        <div class="desemb-item-desc">${escapeHtml(i.descricao)}</div>
+        ${i.caixa_id ? `<div class="desemb-item-tag">🧰 Caixa</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+  atualizarProgressoDesembarque();
+}
+
+function fmtQtdCampo(q) {
+  const n = parseFloat(q) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+function atualizarProgressoDesembarque() {
+  const total = desembarqueItens.length;
+  const ok = desembarqueItens.filter(i => i.desembarcado_em).length;
+  const pct = total ? Math.round((ok / total) * 100) : 0;
+  document.getElementById('desemb-progress-fill').style.width = pct + '%';
+  document.getElementById('desemb-progress-label').textContent = `${ok} de ${total} itens conferidos`;
+}
+
+async function toggleItemDesembarque(itemId) {
+  const item = desembarqueItens.find(i => i.id === itemId);
+  if (!item) return;
+  const novoValor = !item.desembarcado_em;
+  try {
+    await api('PUT', `/carregamentos/${desembarqueCarregamentoId}/desembarque/itens/${itemId}`, { confirmado: novoValor });
+    item.desembarcado_em = novoValor ? new Date().toISOString() : null;
+    renderItensDesembarque();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function confirmarCodigoManual() {
+  const input = document.getElementById('desemb-codigo-manual');
+  const codigo = input.value.trim();
+  if (!codigo) return;
+  await confirmarCodigoDesembarque(codigo);
+  input.value = '';
+  input.focus();
+}
+
+// Usada tanto pelo campo manual quanto pelo scanner contínuo — resolve
+// o item pelo código dentro da lista já carregada deste carregamento
+// (evita mais uma chamada ao servidor por leitura).
+async function confirmarCodigoDesembarque(codigo) {
+  const item = desembarqueItens.find(i => (i.codigo_item || '').toLowerCase() === codigo.toLowerCase());
+  if (!item) { toast('Código não pertence a este carregamento.', true); return; }
+  if (item.desembarcado_em) { toast(`${item.codigo_item} já estava confirmado.`); return; }
+  try {
+    await api('PUT', `/carregamentos/${desembarqueCarregamentoId}/desembarque/itens/${item.id}`, { confirmado: true });
+    item.desembarcado_em = new Date().toISOString();
+    renderItensDesembarque();
+    toast(`✓ ${item.codigo_item} confirmado.`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function salvarDesembarque() {
+  const responsavel_nome = document.getElementById('desemb-responsavel').value.trim();
+  if (!responsavel_nome) { toast('Informe o responsável pelo desembarque.', true); return; }
+
+  const faltando = desembarqueItens.filter(i => !i.desembarcado_em);
+  if (faltando.length) {
+    const confirma = confirm(`Faltam ${faltando.length} ${faltando.length === 1 ? 'item' : 'itens'} conferir. Deseja salvar mesmo assim?`);
+    if (!confirma) return;
+  }
+
+  const btn = document.getElementById('btn-salvar-desembarque');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const data = await api('POST', `/carregamentos/${desembarqueCarregamentoId}/desembarque/finalizar`, { responsavel_nome });
+    toast(data.mensagem || 'Desembarque salvo.');
+    fecharDesembarque();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
+  }
+}
+
+async function gerarRomaneioFaltantes() {
+  const responsavel_nome = document.getElementById('desemb-responsavel').value.trim();
+  await baixarRomaneio(
+    `/carregamentos/${desembarqueCarregamentoId}/desembarque/romaneio`,
+    'btn-romaneio-faltantes',
+    `romaneio-faltantes-${desembarqueCarregamentoId}.pdf`,
+    { responsavel_nome }
+  );
+}
+
+// Scanner contínuo: diferente do abrirScanner(tipo, idx) genérico
+// (que fecha após uma leitura), aqui a câmera continua ativa —
+// confere um item atrás do outro sem precisar reabrir o scanner a
+// cada leitura, prática essencial pra conferir uma carga inteira.
+async function abrirScannerDesembarque() {
+  ultimoCodigoScanDesemb = null;
+  ultimoScanDesembEm = 0;
+  await abrirScanner('desembarque', null);
+}
+
+function processarCodigoScanDesembarque(codigo) {
+  // Enquanto o código continua no quadro da câmera, o html5-qrcode
+  // dispara o callback várias vezes seguidas — ignora repetições do
+  // mesmo código dentro de 1,5s pra não gerar toasts duplicados.
+  const agora = Date.now();
+  if (codigo === ultimoCodigoScanDesemb && agora - ultimoScanDesembEm < 1500) return;
+  ultimoCodigoScanDesemb = codigo;
+  ultimoScanDesembEm = agora;
+  confirmarCodigoDesembarque(codigo);
 }
 
 // ── CAIXAS (histórico) ────────────────────────────────
@@ -1047,14 +1310,17 @@ async function gerarRomaneioCarregamento(id) {
   await baixarRomaneio(`/carregamentos/${id}/romaneio`, `btn-romaneio-carreg-${id}`, `romaneio-carregamento-${id}.pdf`);
 }
 
-async function baixarRomaneio(path, btnId, nomeArquivoFallback) {
+async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
   const btn = document.getElementById(btnId);
   const textoOriginal = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
   try {
+    const headers = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
     const resp = await fetch(API + path, {
       method: 'POST',
-      headers: TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {},
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     if (!resp.ok) {
       let msg = 'Erro ao gerar romaneio.';
@@ -1207,8 +1473,11 @@ async function salvarCarregamento() {
 // ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
 // tipo: 'carregamento' (pode ser um item avulso OU o código de uma
 // caixa inteira, que expande em N itens), 'caixa' (item avulso sendo
-// cadastrado dentro de uma Nova Caixa) ou 'alterar' (item avulso
-// sendo adicionado a uma caixa já aberta, via "Alterar").
+// cadastrado dentro de uma Nova Caixa), 'alterar' (item avulso sendo
+// adicionado a uma caixa já aberta, via "Alterar") ou 'desembarque'
+// (conferência no perfil Em Campo — diferente dos outros, NÃO fecha
+// o scanner a cada leitura, pra conferir vários itens em sequência
+// sem reabrir a câmera toda hora).
 async function abrirScanner(tipo, idx) {
   scannerContext = { tipo, idx };
   abrirModal('mo-scanner');
@@ -1225,6 +1494,10 @@ async function abrirScanner(tipo, idx) {
       { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
       (decodedText) => {
         const ctx = scannerContext;
+        if (ctx.tipo === 'desembarque') {
+          processarCodigoScanDesembarque(decodedText);
+          return;
+        }
         fecharScanner();
         if (ctx.tipo === 'caixa') {
           atualizaItemCaixa(ctx.idx, 'codigo_item', decodedText);

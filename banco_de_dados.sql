@@ -15,23 +15,31 @@ USE burntech_expedicao;
 -- descarregamento) da expedição.
 -- ------------------------------------------------------------
 CREATE TABLE carregamentos (
-  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  tipo              ENUM('carregamento', 'descarregamento') NOT NULL DEFAULT 'carregamento',
-  responsavel_nome  VARCHAR(150) NOT NULL,
-  numero_projeto    VARCHAR(50)  NOT NULL,
-  placa             VARCHAR(10)  NOT NULL,
-  cidade_destino    VARCHAR(150) NOT NULL,
-  observacoes       VARCHAR(500) NULL,
-  status            ENUM('em_andamento', 'concluido', 'cancelado') NOT NULL DEFAULT 'concluido',
-  criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'expedicao',
-  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                       INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  tipo                     ENUM('carregamento', 'descarregamento') NOT NULL DEFAULT 'carregamento',
+  responsavel_nome         VARCHAR(150) NOT NULL,
+  numero_projeto           VARCHAR(50)  NOT NULL,
+  placa                    VARCHAR(10)  NOT NULL,
+  cidade_destino           VARCHAR(150) NOT NULL,
+  observacoes              VARCHAR(500) NULL,
+  status                   ENUM('em_andamento', 'concluido', 'cancelado') NOT NULL DEFAULT 'concluido',
+  criado_por_perfil        ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'expedicao',
+  -- Desembarque (perfil Em Campo): confere item a item, na chegada,
+  -- os materiais que saíram no carregamento. "pendente" = ninguém
+  -- ainda salvou o desembarque; "parcial" = salvo, mas faltou item;
+  -- "concluido" = salvo com todos os itens conferidos.
+  desembarque_status       ENUM('pendente', 'parcial', 'concluido') NOT NULL DEFAULT 'pendente',
+  desembarque_responsavel  VARCHAR(150) NULL,
+  desembarque_em           DATETIME NULL,
+  criado_em                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_carregamentos_numero_projeto (numero_projeto),
   KEY idx_carregamentos_placa (placa),
   KEY idx_carregamentos_criado_em (criado_em),
   KEY idx_carregamentos_status (status),
-  KEY idx_carregamentos_tipo (tipo)
+  KEY idx_carregamentos_tipo (tipo),
+  KEY idx_carregamentos_desembarque_status (desembarque_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -100,6 +108,9 @@ CREATE TABLE carregamento_itens (
   descricao        VARCHAR(255) NOT NULL,
   quantidade       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
   ordem            SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  -- Preenchido pelo perfil Em Campo ao conferir o item na chegada
+  -- (fluxo de Desembarque). NULL = ainda não conferido/descarregado.
+  desembarcado_em  DATETIME NULL,
   criado_em        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_itens_carregamento_id (carregamento_id),
@@ -157,10 +168,14 @@ SELECT
   c.observacoes,
   c.status,
   c.criado_por_perfil,
+  c.desembarque_status,
+  c.desembarque_responsavel,
+  c.desembarque_em,
   c.criado_em,
   c.atualizado_em,
-  COUNT(ci.id)                    AS total_itens,
-  COALESCE(SUM(ci.quantidade), 0) AS quantidade_total
+  COUNT(ci.id)                                            AS total_itens,
+  COALESCE(SUM(ci.quantidade), 0)                         AS quantidade_total,
+  COUNT(ci.desembarcado_em)                               AS total_itens_desembarcados
 FROM carregamentos c
 LEFT JOIN carregamento_itens ci ON ci.carregamento_id = c.id
 GROUP BY c.id;

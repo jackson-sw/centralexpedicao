@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasExpedicao } = require('../middleware/auth');
+const { auth, apenasExpedicao, apenasEmCampo } = require('../middleware/auth');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioCarregamentoPDF } = require('../pdf/romaneioCarregamento');
+const { gerarRomaneioFaltantesPDF } = require('../pdf/romaneioFaltantes');
 
 // GET /api/carregamentos — histórico (mais recentes primeiro)
 router.get('/', auth, async (req, res) => {
@@ -183,6 +184,152 @@ router.post('/:id/romaneio', auth, async (req, res) => {
   } catch (err) {
     console.error('[POST /carregamentos/:id/romaneio]', err.message);
     res.status(500).json({ erro: 'Erro ao gerar romaneio.' });
+  }
+});
+
+// ── DESEMBARQUE (perfil Em Campo) ──────────────────────────────
+// Conferência item a item, na chegada, dos materiais que saíram no
+// carregamento. Cada item confirmado grava desembarcado_em; o
+// carregamento em si só muda de status quando o Salvar é acionado
+// (POST .../finalizar) — até lá fica "pendente" mesmo com itens já
+// conferidos, então dá pra fechar a tela e retomar depois sem perder
+// o que já foi lido.
+
+// PUT /api/carregamentos/:id/desembarque/itens/:itemId — confirma ou
+// desfaz a conferência de um item específico. Usado tanto pelo scanner
+// (que resolve o item pelo código no frontend e chama isso pelo id)
+// quanto pelo toque manual na lista pra corrigir engano.
+router.put('/:id/desembarque/itens/:itemId', auth, apenasEmCampo, async (req, res) => {
+  try {
+    const confirmado = req.body.confirmado !== false; // default true
+
+    const [[item]] = await db.query(
+      'SELECT * FROM carregamento_itens WHERE id = ? AND carregamento_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não pertence a este carregamento.' });
+
+    await db.query(
+      'UPDATE carregamento_itens SET desembarcado_em = ? WHERE id = ?',
+      [confirmado ? new Date() : null, item.id]
+    );
+
+    res.json({ id: item.id, confirmado });
+  } catch (err) {
+    console.error('[PUT /carregamentos/:id/desembarque/itens/:itemId]', err.message);
+    res.status(500).json({ erro: 'Erro ao atualizar item do desembarque.' });
+  }
+});
+
+// POST /api/carregamentos/:id/desembarque/finalizar — fecha a tela de
+// desembarque (botão "Salvar"). Permite salvar mesmo com itens
+// faltando — nesse caso o status fica "parcial" em vez de "concluido".
+router.post('/:id/desembarque/finalizar', auth, apenasEmCampo, async (req, res) => {
+  try {
+    const responsavel_nome = (req.body.responsavel_nome || '').trim();
+    if (!responsavel_nome) {
+      return res.status(400).json({ erro: 'Informe o responsável pelo desembarque.' });
+    }
+
+    const [[carregamento]] = await db.query('SELECT id FROM carregamentos WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+
+    const [[{ totalItens, totalConferidos }]] = await db.query(
+      `SELECT COUNT(*) AS totalItens, COUNT(desembarcado_em) AS totalConferidos
+       FROM carregamento_itens WHERE carregamento_id = ?`,
+      [req.params.id]
+    );
+    const status = totalConferidos >= totalItens && totalItens > 0 ? 'concluido' : 'parcial';
+
+    await db.query(
+      `UPDATE carregamentos
+       SET desembarque_status = ?, desembarque_responsavel = ?, desembarque_em = NOW()
+       WHERE id = ?`,
+      [status, responsavel_nome, req.params.id]
+    );
+
+    res.json({
+      status,
+      total_itens: totalItens,
+      total_conferidos: totalConferidos,
+      faltantes: totalItens - totalConferidos,
+      mensagem: status === 'concluido'
+        ? 'Desembarque salvo — todos os itens conferidos.'
+        : `Desembarque salvo com ${totalItens - totalConferidos} ${totalItens - totalConferidos === 1 ? 'item pendente' : 'itens pendentes'}.`,
+    });
+  } catch (err) {
+    console.error('[POST /carregamentos/:id/desembarque/finalizar]', err.message);
+    res.status(500).json({ erro: 'Erro ao salvar desembarque.' });
+  }
+});
+
+// POST /api/carregamentos/:id/desembarque/romaneio — gera e envia por
+// e-mail o PDF com os itens ainda não conferidos, no estado em que a
+// conferência estiver no momento (não precisa ter clicado Salvar
+// antes) — útil pra avisar a Expedição/logística de faltas assim que
+// percebidas, mesmo com o desembarque ainda em andamento.
+router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) => {
+  try {
+    const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+
+    const [itens] = await db.query(
+      `SELECT ci.*, cx.codigo_barras AS caixa_codigo
+       FROM carregamento_itens ci
+       LEFT JOIN caixas cx ON cx.id = ci.caixa_id
+       WHERE ci.carregamento_id = ?
+       ORDER BY ci.ordem ASC, ci.id ASC`,
+      [req.params.id]
+    );
+    const itensFaltantes = itens.filter((i) => !i.desembarcado_em);
+    const responsavelDesembarque = (req.body.responsavel_nome || carregamento.desembarque_responsavel || '').trim();
+
+    const pdfBuffer = await gerarRomaneioFaltantesPDF({
+      carregamento,
+      itensFaltantes,
+      totalItens: itens.length,
+      responsavelDesembarque,
+    });
+    const nomeArquivo = `romaneio-faltantes-${String(carregamento.numero_projeto).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+
+    let emailEnviado = false;
+    let emailErro = '';
+    const destinatarios = (process.env.ROMANEIO_EMAIL_TO || '').trim();
+    if (destinatarios) {
+      try {
+        await enviarEmail({
+          to: destinatarios,
+          subject: itensFaltantes.length
+            ? `Itens faltantes — Carregamento #${carregamento.numero_projeto}`
+            : `Desembarque conferido — Carregamento #${carregamento.numero_projeto}`,
+          html: `
+            <p>${itensFaltantes.length
+              ? `Faltam <strong>${itensFaltantes.length}</strong> de ${itens.length} itens conferir no desembarque`
+              : `Todos os ${itens.length} itens foram conferidos no desembarque`
+            } do carregamento <strong>#${carregamento.numero_projeto}</strong>,
+            placa <strong>${carregamento.placa || '—'}</strong>, destino ${carregamento.cidade_destino}.</p>
+            <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
+          `,
+          attachments: [{ filename: nomeArquivo, content: pdfBuffer, contentType: 'application/pdf' }],
+        });
+        emailEnviado = true;
+      } catch (mailErr) {
+        emailErro = sanitizarErroHeader(mailErr.message);
+        console.error('[POST /carregamentos/:id/desembarque/romaneio] falha ao enviar e-mail:', mailErr.message);
+      }
+    } else {
+      emailErro = 'ROMANEIO_EMAIL_TO nao configurado no servidor.';
+      console.warn('[POST /carregamentos/:id/desembarque/romaneio] ROMANEIO_EMAIL_TO não configurado — e-mail não enviado.');
+    }
+
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${nomeArquivo}"`);
+    res.set('X-Email-Enviado', emailEnviado ? 'true' : 'false');
+    if (emailErro) res.set('X-Email-Erro', emailErro);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[POST /carregamentos/:id/desembarque/romaneio]', err.message);
+    res.status(500).json({ erro: 'Erro ao gerar romaneio de faltantes.' });
   }
 });
 
