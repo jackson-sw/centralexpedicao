@@ -4,9 +4,9 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 
 ## Arquitetura
 
-- `backend/` — API REST em Express (Node.js, CommonJS, `mysql2/promise`). Ponto de entrada: `backend/server.js`. Usa `pdfkit` para gerar o romaneio em PDF de cada caixa e `nodemailer` (`backend/mail.js`) para enviá-lo por e-mail.
+- `backend/` — API REST em Express (Node.js, CommonJS, `mysql2/promise`). Ponto de entrada: `backend/server.js`. Usa `pdfkit` para gerar o romaneio em PDF de cada caixa e `nodemailer` (`backend/mail.js`) para enviá-lo por e-mail. `backend/dbErp.js` mantém uma segunda conexão, somente leitura, com o banco do ERP (SQL Server) — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp).
 - `frontend/index.html` — frontend inteiro em um único arquivo (CSS e JS inline, sem framework, sem bundler). Usa a biblioteca `html5-qrcode` (via CDN) para leitura de código de barras pela câmera e `JsBarcode` (via CDN) para gerar o código de barras da caixa.
-- `frontend/admin.html` — painel administrativo separado (rota `/admin`), com login próprio, para cadastro de itens/materiais (código + descrição).
+- `frontend/admin.html` — painel administrativo separado (rota `/admin`), com login próprio, para consultar o catálogo de itens/materiais (somente leitura — vem do ERP).
 - `frontend/manifest.json` + `frontend/service-worker.js` — configuração PWA (instalável, com cache do app shell).
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
@@ -43,7 +43,27 @@ Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/const
 
 ## Painel Administrativo (`/admin`)
 
-Cadastro do catálogo de itens/materiais (campos: **código** e **descrição**), com busca, ordenação, paginação e edição/exclusão — acesse em `http://localhost:3002/admin` (ou `https://seu-dominio.com.br/admin` em produção) e entre com a senha do Admin.
+Consulta do catálogo de itens/materiais (código, descrição, quantidade), com busca, ordenação e paginação — **somente leitura**. Cadastro, edição e exclusão de itens não acontecem mais aqui: são feitos direto no ERP (ver seção abaixo). Acesse em `http://localhost:3002/admin` (ou `https://seu-dominio.com.br/admin` em produção) e entre com a senha do Admin.
+
+## Catálogo de itens (ERP)
+
+O catálogo de itens/materiais não é mais mantido dentro desta aplicação. Toda consulta de item — auto-preenchimento de descrição em Novo Carregamento/Nova Caixa/Alterar Caixa e a listagem do painel admin — é feita **em tempo real** direto no banco do ERP (SQL Server), na tabela `PRO_PRODUTO`:
+
+| Campo do sistema | Coluna no ERP (`PRO_PRODUTO`) |
+|---|---|
+| código | `PRO_Codigo` |
+| descrição | `PRO_Descricao` |
+| quantidade | `PRO_PesoLiquido` |
+
+`backend/dbErp.js` mantém uma pool de conexões própria (via `mssql`/Tedious) separada da conexão MySQL principal — essa conexão é somente leitura, a aplicação nunca grava no ERP. As credenciais ficam em `backend/.env` (`ERP_DB_*`, ver abaixo).
+
+Para diagnosticar problemas de conexão sem precisar logar no app:
+
+```bash
+curl http://localhost:3002/api/health/erp
+```
+
+A tabela `itens_materiais` que existia no MySQL local não é mais usada pelo sistema — instalações antigas podem removê-la com `alter_remover_itens_materiais.sql` (opcional, ver [Atualizando um banco já existente](#atualizando-um-banco-já-existente)).
 
 ## Setup e execução
 
@@ -128,9 +148,9 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_EMAIL_TO` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
-As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas).
+As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp).
 
 ## Atualizando um banco já existente
 
@@ -138,8 +158,12 @@ Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql`
 
 ```bash
 mysql -u root -p burntech_expedicao < alter_almoxarifado.sql            # perfil Almoxarifado
-mysql -u root -p burntech_expedicao < alter_itens_materiais_quantidade.sql  # campo Quantidade no catálogo
+mysql -u root -p burntech_expedicao < alter_itens_materiais_quantidade.sql  # campo Quantidade no catálogo (legado, ver abaixo)
 mysql -u root -p burntech_expedicao < alter_caixas_workflow.sql         # fluxo aberta/fechada + responsável por item
+mysql -u root -p burntech_expedicao < alter_carregamentos_placa.sql     # campo Placa no carregamento
+mysql -u root -p burntech_expedicao < alter_view_carregamentos_placa.sql          # corrige view sem a coluna placa
+mysql -u root -p burntech_expedicao < alter_carregamento_itens_caixa_item_id.sql  # rastreia responsável por item no romaneio
+mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcional — remove a tabela local, não usada desde a integração com o ERP
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

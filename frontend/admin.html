@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#c0392b">
 <title>Painel Administrativo — Central Expedição</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 :root{
   --red:#c0392b; --red-dark:#a93226; --red-light:#fff5f5; --red-soft:rgba(192,57,43,.1);
@@ -76,7 +75,7 @@ tbody tr:hover td{background:#fafbff;}
 .td-qtd{text-align:right;font-variant-numeric:tabular-nums;}
 th.th-qtd{text-align:right;}
 .empty-row{text-align:center;padding:56px 24px;color:var(--muted2);font-size:14px;}
-.acoes-cell{display:flex;gap:6px;}
+.erp-hint{font-size:12px;color:var(--muted);margin:-10px 0 14px;}
 
 /* ── PAGINAÇÃO ─────────────────────────────────────── */
 .pagination{display:flex;align-items:center;justify-content:center;gap:5px;padding:16px;border-top:1px solid var(--border);flex-wrap:wrap;}
@@ -85,33 +84,6 @@ th.th-qtd{text-align:right;}
 .pagination button.pg-active{background:var(--red);border-color:var(--red);color:#fff;}
 .pagination button:disabled{opacity:.35;cursor:default;}
 .pg-info{font-size:12.5px;color:var(--muted);padding:0 8px;}
-
-/* ── MODAL ─────────────────────────────────────────── */
-.overlay{position:fixed;inset:0;background:rgba(15,15,20,.5);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
-.overlay.open{display:flex;}
-.modal{background:#fff;border-radius:16px;width:440px;max-width:94vw;box-shadow:0 24px 70px rgba(0,0,0,.22);}
-.mh{padding:22px 24px 4px;}
-.mt{font-size:17px;font-weight:800;}
-.ms{font-size:12.5px;color:var(--muted);margin-top:4px;}
-.mb{padding:18px 24px;}
-.mf{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px;}
-.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
-.fg label{font-size:12.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;}
-.fg input{background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
-.fg input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);}
-.cod-row{display:flex;gap:8px;}
-.cod-row input{flex:1;}
-.btn-cam{background:var(--text);color:#fff;border:none;border-radius:9px;width:44px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;transition:background .15s;}
-.btn-cam:hover{background:#000;}
-
-/* ── SCANNER ───────────────────────────────────────── */
-.scanner-modal{background:#000;border-radius:16px;width:420px;max-width:94vw;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4);}
-.scanner-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;color:#fff;}
-.scanner-head .mt{color:#fff;font-size:14px;}
-.scanner-head .mx{background:rgba(255,255,255,.15);color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;}
-#scanner-viewport{width:100%;min-height:280px;background:#111;}
-.scanner-hint{padding:12px 18px 18px;color:#d1d5db;font-size:12.5px;text-align:center;}
-.scanner-fallback{padding:0 18px 18px;}
 
 /* ── TOAST ─────────────────────────────────────────── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,50px);background:var(--text);color:#fff;border-radius:10px;padding:12px 22px;font-size:13.5px;font-weight:500;z-index:200;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);}
@@ -142,7 +114,7 @@ th.th-qtd{text-align:right;}
       <div class="login-logo-text">BURN<span>TECH</span> CALDEIRAS</div>
     </div>
     <div class="login-title">Painel Administrativo</div>
-    <div class="login-sub">Cadastro de itens e materiais — Central Expedição</div>
+    <div class="login-sub">Consulta de itens e materiais (ERP) — Central Expedição</div>
 
     <label class="login-lbl">Senha do painel</label>
     <input type="password" class="pin-inp" id="login-senha" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')doLogin()">
@@ -170,8 +142,8 @@ th.th-qtd{text-align:right;}
     <div class="toolbar">
       <input type="text" class="search-inp" id="busca" placeholder="🔍 Buscar por código ou descrição..." oninput="aplicarFiltro()">
       <span class="count-label" id="count-label"></span>
-      <button class="btn btn-red" onclick="abrirNovo()">+ Novo Item</button>
     </div>
+    <div class="erp-hint">Catálogo somente-leitura, consultado em tempo real do ERP. Cadastro, edição e exclusão de itens são feitos direto no ERP.</div>
 
     <div class="tcard">
       <table>
@@ -179,55 +151,14 @@ th.th-qtd{text-align:right;}
           <tr>
             <th class="sortable" id="th-codigo" onclick="sortBy('codigo')">Código ↑</th>
             <th class="sortable" id="th-descricao" onclick="sortBy('descricao')">Descrição</th>
-            <th class="sortable th-qtd" id="th-quantidade" style="width:110px" onclick="sortBy('quantidade')">Quantidade</th>
-            <th style="width:150px">Ações</th>
+            <th class="sortable th-qtd" id="th-quantidade" style="width:130px" onclick="sortBy('quantidade')">Quantidade</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="4" class="empty-row">Carregando...</td></tr>
+          <tr><td colspan="3" class="empty-row">Digite um código ou descrição para buscar no ERP...</td></tr>
         </tbody>
       </table>
       <div class="pagination" id="pagination"></div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: NOVO/EDITAR ITEM -->
-<div class="overlay" id="mo-item">
-  <div class="modal">
-    <div class="mh">
-      <div class="mt" id="mo-titulo">Novo Item</div>
-      <div class="ms">Preencha código e descrição do material</div>
-    </div>
-    <div class="mb">
-      <div class="fg">
-        <label>Código *</label>
-        <div class="cod-row">
-          <input id="f-codigo" placeholder="Ex: PRF-1042" onkeydown="if(event.key==='Enter')salvarItem()">
-          <button type="button" class="btn-cam" onclick="abrirScanner()" title="Escanear código de barras">📷</button>
-        </div>
-      </div>
-      <div class="fg"><label>Descrição *</label><input id="f-descricao" placeholder="Ex: Parafuso sextavado 1/2 pol" onkeydown="if(event.key==='Enter')salvarItem()"></div>
-      <div class="fg"><label>Quantidade *</label><input id="f-quantidade" type="number" min="0" step="1" placeholder="Ex: 100" onkeydown="if(event.key==='Enter')salvarItem()"></div>
-    </div>
-    <div class="mf">
-      <button class="btn btn-out" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-red" id="btn-salvar" onclick="salvarItem()">Salvar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: SCANNER DE CÓDIGO DE BARRAS -->
-<div class="overlay" id="mo-scanner">
-  <div class="scanner-modal">
-    <div class="scanner-head">
-      <div><div class="mt">📷 Escanear código de barras</div></div>
-      <button class="mx" onclick="fecharScanner()">×</button>
-    </div>
-    <div id="scanner-viewport"></div>
-    <div class="scanner-hint">Aponte a câmera para o código de barras do item.</div>
-    <div class="scanner-fallback">
-      <button class="btn btn-out" style="width:100%;justify-content:center" onclick="fecharScanner()">Digitar manualmente</button>
     </div>
   </div>
 </div>
@@ -239,12 +170,11 @@ const API = '/api';
 let TOKEN = null; // não persiste em localStorage — precisa logar a cada acesso ao painel
 let itensTodos = [];
 let itensFiltrados = [];
-let editandoId = null;
 let pagina = 1;
 const POR_PAGINA = 50;
 let sortCol = 'codigo';
 let sortDir = 'asc';
-let scannerAtivo = null;
+let buscaDebounce = null;
 
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -288,26 +218,34 @@ function logout() {
   document.getElementById('login-err').textContent = '';
 }
 
-// ── LISTAGEM ──────────────────────────────────────────
+// ── LISTAGEM (consulta o ERP em tempo real) ────────────
+// Sem termo de busca, o backend já limita a 100 itens (o catálogo do
+// ERP pode ter milhares de produtos — não faz sentido trazer tudo de
+// uma vez). Com busca, o próprio SQL Server filtra por código ou
+// descrição (até 200 resultados) — o filtro não é mais feito aqui.
 async function carregarItens() {
+  const busca = document.getElementById('busca').value.trim();
+  document.getElementById('tbody').innerHTML = '<tr><td colspan="3" class="empty-row">Consultando o ERP...</td></tr>';
   try {
-    itensTodos = await api('GET', '/itens-materiais');
-    aplicarFiltro();
+    const qs = busca ? ('?busca=' + encodeURIComponent(busca)) : '';
+    itensTodos = await api('GET', '/itens-materiais' + qs);
+    itensFiltrados = itensTodos;
+    pagina = 1;
+    document.getElementById('count-label').textContent =
+      itensFiltrados.length + ' ' + (itensFiltrados.length === 1 ? 'item' : 'itens') +
+      (itensFiltrados.length >= (busca ? 200 : 100) ? ' (refine a busca para ver mais)' : '');
+    renderTabela();
   } catch (e) {
     document.getElementById('tbody').innerHTML =
-      `<tr><td colspan="4" class="empty-row" style="color:var(--red)">Erro ao carregar: ${esc(e.message)}</td></tr>`;
+      `<tr><td colspan="3" class="empty-row" style="color:var(--red)">Erro ao consultar o ERP: ${esc(e.message)}</td></tr>`;
   }
 }
 
+// Debounce: espera parar de digitar antes de consultar o ERP, pra não
+// disparar uma query a cada tecla.
 function aplicarFiltro() {
-  const busca = document.getElementById('busca').value.toLowerCase().trim();
-  itensFiltrados = itensTodos.filter(i =>
-    !busca || i.codigo.toLowerCase().includes(busca) || i.descricao.toLowerCase().includes(busca)
-  );
-  pagina = 1;
-  document.getElementById('count-label').textContent =
-    itensFiltrados.length + ' ' + (itensFiltrados.length === 1 ? 'item' : 'itens');
-  renderTabela();
+  clearTimeout(buscaDebounce);
+  buscaDebounce = setTimeout(carregarItens, 350);
 }
 
 function sortBy(col) {
@@ -340,7 +278,7 @@ function renderTabela() {
   const page = itensFiltrados.slice(ini, ini + POR_PAGINA);
 
   if (!itensFiltrados.length) {
-    tb.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum item cadastrado.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum item encontrado no ERP.</td></tr>';
     document.getElementById('pagination').innerHTML = '';
     return;
   }
@@ -350,10 +288,6 @@ function renderTabela() {
       <td class="td-codigo">${esc(i.codigo)}</td>
       <td>${esc(i.descricao)}</td>
       <td class="td-qtd">${formatQtd(i.quantidade)}</td>
-      <td class="acoes-cell">
-        <button class="btn btn-out btn-sm" onclick="abrirEditar(${i.id})">Editar</button>
-        <button class="btn btn-out btn-sm" style="color:#991b1b;border-color:#fca5a5" onclick="excluirItem(${i.id})">Excluir</button>
-      </td>
     </tr>
   `).join('');
 
@@ -389,106 +323,6 @@ function irPagina(p) {
   pagina = p;
   renderTabela();
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// ── MODAL NOVO/EDITAR ─────────────────────────────────
-function abrirNovo() {
-  editandoId = null;
-  document.getElementById('mo-titulo').textContent = 'Novo Item';
-  document.getElementById('f-codigo').value = '';
-  document.getElementById('f-descricao').value = '';
-  document.getElementById('f-quantidade').value = '';
-  document.getElementById('mo-item').classList.add('open');
-  setTimeout(() => document.getElementById('f-codigo').focus(), 50);
-}
-
-function abrirEditar(id) {
-  const item = itensTodos.find(i => i.id === id);
-  if (!item) return;
-  editandoId = id;
-  document.getElementById('mo-titulo').textContent = 'Editar Item';
-  document.getElementById('f-codigo').value = item.codigo;
-  document.getElementById('f-descricao').value = item.descricao;
-  document.getElementById('f-quantidade').value = item.quantidade;
-  document.getElementById('mo-item').classList.add('open');
-}
-
-function fecharModal() {
-  document.getElementById('mo-item').classList.remove('open');
-}
-
-async function salvarItem() {
-  const codigo = document.getElementById('f-codigo').value.trim();
-  const descricao = document.getElementById('f-descricao').value.trim();
-  const quantidade = parseFloat(document.getElementById('f-quantidade').value);
-  if (!codigo || !descricao) { toast('Preencha código e descrição.', true); return; }
-  if (!Number.isFinite(quantidade) || quantidade < 0) { toast('Informe uma quantidade válida.', true); return; }
-
-  const btn = document.getElementById('btn-salvar');
-  btn.disabled = true; btn.textContent = 'Salvando...';
-  try {
-    if (editandoId) {
-      await api('PUT', '/itens-materiais/' + editandoId, { codigo, descricao, quantidade });
-      toast('Item atualizado com sucesso.');
-    } else {
-      await api('POST', '/itens-materiais', { codigo, descricao, quantidade });
-      toast('Item cadastrado com sucesso.');
-    }
-    fecharModal();
-    carregarItens();
-  } catch (e) {
-    toast(e.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Salvar';
-  }
-}
-
-// ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
-async function abrirScanner() {
-  document.getElementById('mo-scanner').classList.add('open');
-  try {
-    scannerAtivo = new Html5Qrcode('scanner-viewport');
-    const formatsSupported = [
-      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.QR_CODE,
-    ];
-    await scannerAtivo.start(
-      { facingMode: 'environment' },
-      { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
-      (decodedText) => {
-        document.getElementById('f-codigo').value = decodedText;
-        toast('Código lido: ' + decodedText);
-        fecharScanner();
-      },
-      () => {}
-    );
-  } catch (e) {
-    toast('Não foi possível acessar a câmera. Digite o código manualmente.', true);
-    fecharScanner();
-  }
-}
-
-async function fecharScanner() {
-  if (scannerAtivo) {
-    try { await scannerAtivo.stop(); scannerAtivo.clear(); } catch {}
-    scannerAtivo = null;
-  }
-  document.getElementById('mo-scanner').classList.remove('open');
-}
-
-async function excluirItem(id) {
-  const item = itensTodos.find(i => i.id === id);
-  if (!item) return;
-  if (!confirm(`Excluir o item "${item.codigo} — ${item.descricao}"?`)) return;
-  try {
-    await api('DELETE', '/itens-materiais/' + id);
-    toast('Item removido.');
-    carregarItens();
-  } catch (e) {
-    toast(e.message, true);
-  }
 }
 
 // ── UTIL ──────────────────────────────────────────────

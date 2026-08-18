@@ -9,6 +9,7 @@ const carregamentosRoutes  = require('./routes/carregamentos');
 const caixasRoutes         = require('./routes/caixas');
 const itensMateriaisRoutes = require('./routes/itensMateriais');
 const { verificarConexao } = require('./mail');
+const { getPool: getPoolErp } = require('./dbErp');
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
@@ -64,6 +65,20 @@ app.get('/api/health/mail', async (req, res) => {
   try {
     await verificarConexao();
     res.json({ status: 'ok', mensagem: 'Conexão SMTP autenticada com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ status: 'erro', mensagem: err.message });
+  }
+});
+
+// Testa a conexão com o banco do ERP (SQL Server) configurada em
+// backend/.env (ERP_DB_*), sem depender de logar no app — útil para
+// diagnosticar catálogo de itens fora do ar.
+// Ex.: curl http://localhost:3002/api/health/erp
+app.get('/api/health/erp', async (req, res) => {
+  try {
+    const pool = await getPoolErp();
+    await pool.request().query('SELECT TOP 1 1 AS ok FROM PRO_PRODUTO');
+    res.json({ status: 'ok', mensagem: 'Conexão com o ERP (SQL Server) e leitura de PRO_PRODUTO OK.' });
   } catch (err) {
     res.status(500).json({ status: 'erro', mensagem: err.message });
   }

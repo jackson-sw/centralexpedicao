@@ -166,22 +166,12 @@ LEFT JOIN carregamento_itens ci ON ci.carregamento_id = c.id
 GROUP BY c.id;
 
 -- ------------------------------------------------------------
--- Tabela: itens_materiais
--- Catálogo mestre de materiais, mantido pelo painel administrativo
--- (/admin). Código (único), descrição e quantidade em estoque.
--- ------------------------------------------------------------
-CREATE TABLE itens_materiais (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  codigo        VARCHAR(100) NOT NULL,
-  descricao     VARCHAR(255) NOT NULL,
-  quantidade    DECIMAL(10,2) NOT NULL DEFAULT 1.00,
-  criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_itens_materiais_codigo (codigo),
-  KEY idx_itens_materiais_descricao (descricao)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+-- NÃO existe mais uma tabela "itens_materiais" neste banco.
+-- O catálogo de itens/materiais passou a ser lido em tempo real do
+-- banco do ERP (SQL Server, tabela PRO_PRODUTO — ver backend/dbErp.js
+-- e backend/routes/itensMateriais.js), configurado via ERP_DB_* em
+-- backend/.env. Instalações antigas que ainda têm a tabela local
+-- podem removê-la com alter_remover_itens_materiais.sql (opcional).
 -- ------------------------------------------------------------
 -- Dados iniciais: nenhum. Os perfis de acesso (Expedição / Em Campo /
 -- Almoxarifado / Admin) são autenticados por senha fixa via hash

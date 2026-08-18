@@ -1,15 +1,43 @@
 const router = require('express').Router();
-const db     = require('../db');
+const { sql, getPool } = require('../dbErp');
 const { auth, apenasAdmin } = require('../middleware/auth');
 
-// GET /api/itens-materiais — lista completa (painel admin)
+// Catálogo de itens/materiais — lido em tempo real do ERP (SQL Server,
+// tabela PRO_PRODUTO). Não existe mais cadastro próprio desta aplicação:
+// o item é criado/editado/excluído direto no ERP, fora daqui. RTRIM nas
+// colunas porque, em muitos ERPs, PRO_Codigo/PRO_Descricao são CHAR de
+// tamanho fixo e vêm preenchidos com espaços à direita.
+const SELECT_BASE = `
+  SELECT
+    RTRIM(PRO_Codigo)    AS codigo,
+    RTRIM(PRO_Descricao) AS descricao,
+    PRO_PesoLiquido       AS quantidade
+  FROM PRO_PRODUTO
+`;
+
+// GET /api/itens-materiais — usado pelo painel admin (somente consulta).
+// ?busca=texto filtra por código ou descrição (contém). Sem busca, traz
+// os primeiros 100 itens só pra não tentar carregar a tabela inteira do
+// ERP de uma vez — o catálogo real pode ter milhares de produtos.
 router.get('/', auth, apenasAdmin, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM itens_materiais ORDER BY codigo ASC');
-    res.json(rows);
+    const busca = (req.query.busca || '').trim();
+    const pool = await getPool();
+    const request = pool.request();
+
+    let query = SELECT_BASE;
+    if (busca) {
+      request.input('busca', sql.NVarChar, `%${busca}%`);
+      query += ' WHERE PRO_Codigo LIKE @busca OR PRO_Descricao LIKE @busca';
+    }
+    query += ' ORDER BY PRO_Descricao';
+    query = query.replace('SELECT', `SELECT TOP ${busca ? 200 : 100}`);
+
+    const result = await request.query(query);
+    res.json(result.recordset);
   } catch (err) {
     console.error('[GET /itens-materiais]', err.message);
-    res.status(500).json({ erro: 'Erro ao buscar itens.' });
+    res.status(500).json({ erro: 'Erro ao consultar o catálogo no ERP.' });
   }
 });
 
@@ -19,96 +47,25 @@ router.get('/', auth, apenasAdmin, async (req, res) => {
 // qualquer perfil autenticado pode consultar (não é exclusivo do admin).
 router.get('/codigo/:codigo', auth, async (req, res) => {
   try {
-    const [[item]] = await db.query(
-      'SELECT codigo, descricao, quantidade FROM itens_materiais WHERE codigo = ?',
-      [req.params.codigo]
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('codigo', sql.NVarChar, req.params.codigo.trim());
+
+    const result = await request.query(
+      `SELECT TOP 1
+         RTRIM(PRO_Codigo)    AS codigo,
+         RTRIM(PRO_Descricao) AS descricao,
+         PRO_PesoLiquido       AS quantidade
+       FROM PRO_PRODUTO
+       WHERE RTRIM(PRO_Codigo) = @codigo`
     );
+
+    const item = result.recordset[0];
     if (!item) return res.status(404).json({ erro: 'Item não encontrado no catálogo.' });
     res.json(item);
   } catch (err) {
     console.error('[GET /itens-materiais/codigo/:codigo]', err.message);
-    res.status(500).json({ erro: 'Erro ao buscar item.' });
-  }
-});
-
-// GET /api/itens-materiais/:id
-router.get('/:id', auth, apenasAdmin, async (req, res) => {
-  try {
-    const [[item]] = await db.query('SELECT * FROM itens_materiais WHERE id = ?', [req.params.id]);
-    if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
-    res.json(item);
-  } catch (err) {
-    console.error('[GET /itens-materiais/:id]', err.message);
-    res.status(500).json({ erro: 'Erro ao buscar item.' });
-  }
-});
-
-// POST /api/itens-materiais — cadastrar novo item
-router.post('/', auth, apenasAdmin, async (req, res) => {
-  try {
-    const codigo     = (req.body.codigo    || '').trim();
-    const descricao  = (req.body.descricao || '').trim();
-    const quantidade = parseFloat(req.body.quantidade);
-
-    if (!codigo || !descricao) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: código e descrição.' });
-    }
-    if (!Number.isFinite(quantidade) || quantidade < 0) {
-      return res.status(400).json({ erro: 'Quantidade inválida.' });
-    }
-
-    const [result] = await db.query(
-      'INSERT INTO itens_materiais (codigo, descricao, quantidade) VALUES (?, ?, ?)',
-      [codigo, descricao, quantidade]
-    );
-    res.status(201).json({ id: result.insertId, codigo, descricao, quantidade, mensagem: 'Item cadastrado com sucesso.' });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ erro: 'Já existe um item cadastrado com esse código.' });
-    }
-    console.error('[POST /itens-materiais]', err.message);
-    res.status(500).json({ erro: 'Erro ao cadastrar item.' });
-  }
-});
-
-// PUT /api/itens-materiais/:id — editar item existente
-router.put('/:id', auth, apenasAdmin, async (req, res) => {
-  try {
-    const codigo     = (req.body.codigo    || '').trim();
-    const descricao  = (req.body.descricao || '').trim();
-    const quantidade = parseFloat(req.body.quantidade);
-
-    if (!codigo || !descricao) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: código e descrição.' });
-    }
-    if (!Number.isFinite(quantidade) || quantidade < 0) {
-      return res.status(400).json({ erro: 'Quantidade inválida.' });
-    }
-
-    const [result] = await db.query(
-      'UPDATE itens_materiais SET codigo = ?, descricao = ?, quantidade = ? WHERE id = ?',
-      [codigo, descricao, quantidade, req.params.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ erro: 'Item não encontrado.' });
-    res.json({ mensagem: 'Item atualizado com sucesso.' });
-  } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ erro: 'Já existe um item cadastrado com esse código.' });
-    }
-    console.error('[PUT /itens-materiais/:id]', err.message);
-    res.status(500).json({ erro: 'Erro ao atualizar item.' });
-  }
-});
-
-// DELETE /api/itens-materiais/:id — remover item
-router.delete('/:id', auth, apenasAdmin, async (req, res) => {
-  try {
-    const [result] = await db.query('DELETE FROM itens_materiais WHERE id = ?', [req.params.id]);
-    if (!result.affectedRows) return res.status(404).json({ erro: 'Item não encontrado.' });
-    res.json({ mensagem: 'Item removido com sucesso.' });
-  } catch (err) {
-    console.error('[DELETE /itens-materiais/:id]', err.message);
-    res.status(500).json({ erro: 'Erro ao remover item.' });
+    res.status(500).json({ erro: 'Erro ao consultar item no ERP.' });
   }
 });
 

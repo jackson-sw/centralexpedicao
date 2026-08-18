@@ -28,6 +28,12 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER}
       ROMANEIO_EMAIL_TO: ${ROMANEIO_EMAIL_TO:-jackson.weber@burntech.com.br}
+      ERP_DB_HOST: ${ERP_DB_HOST}
+      ERP_DB_PORT: ${ERP_DB_PORT:-1433}
+      ERP_DB_NAME: ${ERP_DB_NAME}
+      ERP_DB_USER: ${ERP_DB_USER}
+      ERP_DB_PASSWORD: ${ERP_DB_PASSWORD}
+      ERP_DB_ENCRYPT: ${ERP_DB_ENCRYPT:-false}
     depends_on:
       db:
         condition: service_healthy
