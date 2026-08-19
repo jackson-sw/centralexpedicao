@@ -79,11 +79,14 @@ async function processarJob(job) {
     filePath = await baixarPdf(job.id);
     // scale: "noscale" evita que o SumatraPDF tente "encaixar" o PDF de
     // 100x70mm em outro tamanho de página — a etiqueta já vem no tamanho
-    // exato que a Argox espera.
+    // exato que a Argox espera. orientation: "landscape" é necessário
+    // porque o PDF é mais largo (100mm) do que alto (70mm) — sem isso,
+    // o driver da Argox assume retrato e gira/corta a etiqueta 90°.
     await print(filePath, {
       printer: job.impressora,
       silent: true,
       scale: 'noscale',
+      orientation: 'landscape',
     });
     await marcarConcluido(job.id);
     log(`Etiqueta #${job.id} impressa com sucesso.`);
