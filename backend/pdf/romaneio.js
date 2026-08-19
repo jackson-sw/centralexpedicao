@@ -87,13 +87,16 @@ function desenharCabecalho(doc, pageWidth, caixa) {
 
 function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
   const colCodigo    = marginX;
-  const colDescricao = marginX + 110;
-  const colQtd       = contentRight - 170;
-  const colResp      = contentRight - 120;
+  const colDescricao = colCodigo + 100;
+  const colQtd       = colDescricao + 165;
+  const colResp      = colQtd + 40;
+  const colData      = colResp + 100;
   const rowH = 20;
   const headerH = 22;
-  const larguraCodigo    = colDescricao - colCodigo - 10;
-  const larguraDescricao = colQtd - colDescricao - 10;
+  const larguraCodigo     = colDescricao - colCodigo - 10;
+  const larguraDescricao  = colQtd - colDescricao - 10;
+  const larguraResp       = colData - colResp - 10;
+  const larguraData       = contentRight - colData - 10;
 
   function cabecalhoTabela(yy) {
     doc.rect(marginX, yy, contentRight - marginX, headerH).fill('#f3f4f6');
@@ -102,6 +105,7 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
     doc.text('DESCRIÇÃO',   colDescricao + 6, yy + 7);
     doc.text('QTD.',        colQtd + 6,       yy + 7);
     doc.text('RESPONSÁVEL', colResp + 6,      yy + 7);
+    doc.text('DATA/HORA',   colData + 6,      yy + 7);
     return yy + headerH;
   }
 
@@ -110,12 +114,16 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
 
   doc.font('Helvetica').fontSize(9);
   itens.forEach((item, idx) => {
-    // Código ou descrição longos podem quebrar em mais de uma linha — a
-    // altura da linha da tabela precisa acompanhar isso, senão o traço
-    // divisório é desenhado por cima do texto que "vazou" da linha.
-    const alturaCodigo    = doc.heightOfString(item.codigo_item || '', { width: larguraCodigo });
-    const alturaDescricao = doc.heightOfString(item.descricao || '',   { width: larguraDescricao });
-    const alturaLinha = Math.max(rowH, Math.max(alturaCodigo, alturaDescricao) + 10);
+    // Código, descrição ou responsável longos podem quebrar em mais de
+    // uma linha — a altura da linha da tabela precisa acompanhar isso,
+    // senão o traço divisório é desenhado por cima do texto que "vazou"
+    // da linha.
+    const dataHora = fmtDT(item.criado_em);
+    const alturaCodigo     = doc.heightOfString(item.codigo_item || '',            { width: larguraCodigo });
+    const alturaDescricao  = doc.heightOfString(item.descricao || '',              { width: larguraDescricao });
+    const alturaResp       = doc.heightOfString(item.responsavel_nome || '—',      { width: larguraResp });
+    const alturaData       = doc.heightOfString(dataHora,                          { width: larguraData });
+    const alturaLinha = Math.max(rowH, Math.max(alturaCodigo, alturaDescricao, alturaResp, alturaData) + 10);
 
     if (y + alturaLinha > doc.page.height - 90) {
       doc.addPage();
@@ -130,7 +138,10 @@ function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
     doc.text(item.codigo_item,               colCodigo + 6,    y + 5, { width: larguraCodigo });
     doc.text(item.descricao,                  colDescricao + 6, y + 5, { width: larguraDescricao });
     doc.text(fmtQtd(item.quantidade),         colQtd + 6,       y + 5, { width: colResp - colQtd - 10 });
-    doc.text(item.responsavel_nome || '—',    colResp + 6,      y + 5, { width: contentRight - colResp - 10 });
+    doc.text(item.responsavel_nome || '—',    colResp + 6,      y + 5, { width: larguraResp });
+    // Data/hora em que o item foi incluído na caixa (caixa_itens.criado_em)
+    // — diferente da data de fechamento da caixa, mostrada no cabeçalho.
+    doc.text(dataHora,                        colData + 6,      y + 5, { width: larguraData });
     y += alturaLinha;
     doc.moveTo(marginX, y).lineTo(contentRight, y).strokeColor(BORDER).lineWidth(0.5).stroke();
   });
