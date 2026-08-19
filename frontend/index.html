@@ -42,7 +42,7 @@ button{-webkit-appearance:none;appearance:none;}
 .login-sub{font-size:13.5px;color:var(--muted);margin-bottom:26px;}
 .login-lbl{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px;}
 .login-err{font-size:12.5px;color:#e74c3c;min-height:18px;margin-bottom:4px;font-weight:500;}
-.pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:22px;}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;}
 .perfil{padding:18px 10px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:center;transition:all .18s;user-select:none;background:#fff;}
 .perfil:hover{border-color:var(--red);background:var(--red-light);transform:translateY(-1px);}
 .perfil.on{border-color:var(--red);background:var(--red-light);box-shadow:0 0 0 3px var(--red-soft);}
@@ -73,6 +73,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .r-exp{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
 .r-campo{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;}
 .r-almox{background:#fef3c7;color:#92400e;border:1px solid #fde68a;}
+.r-expadm{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;}
 .btn-sair{background:none;border:1px solid var(--border);border-radius:7px;padding:6px 13px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
 .btn-sair:hover{border-color:var(--red);color:var(--red);}
 .wrap{max-width:900px;margin:0 auto;padding:18px 16px calc(90px + var(--safe-bottom));flex:1;width:100%;}
@@ -143,6 +144,8 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .desemb-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--green),#15803d);border-radius:5px;transition:width .25s;}
 .desemb-progress-label{font-size:12px;color:var(--muted);font-weight:600;}
 .desemb-item{display:flex;align-items:center;gap:12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:8px;transition:all .15s;}
+.desemb-item.clicavel{cursor:pointer;}
+.desemb-item.clicavel:hover{border-color:var(--border2);}
 .desemb-item.ok{background:#f0fdf4;border-color:#bbf7d0;}
 .desemb-item-check{width:26px;height:26px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;transition:all .15s;}
 .desemb-item.ok .desemb-item-check{background:var(--green);border-color:var(--green);}
@@ -295,6 +298,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <div class="plabel">Almoxarifado</div>
         <div class="psub">Montagem de caixas</div>
       </div>
+      <div class="perfil" id="p-expedicao_administrativo" onclick="selPerfil('expedicao_administrativo')">
+        <div class="picon">🗂️</div>
+        <div class="plabel">Expedição Administrativo</div>
+        <div class="psub">Expedição + Em Campo</div>
+      </div>
     </div>
 
     <div id="auth-pin" style="display:none;">
@@ -325,6 +333,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <button class="btn-sair" onclick="sair()">Sair</button>
     </div>
   </header>
+
+  <!-- Guia Expedição / Em Campo — só para o perfil Expedição Administrativo,
+       que reúne as duas telas (ver boot() e trocarAbaExpAdm()). -->
+  <div id="expadm-tabs-wrap" style="display:none;max-width:900px;margin:0 auto;padding:14px 16px 0;">
+    <div class="hist-tabs">
+      <div class="hist-tab on" id="expadm-tab-expedicao" onclick="trocarAbaExpAdm('expedicao')">📦 Expedição</div>
+      <div class="hist-tab" id="expadm-tab-campo" onclick="trocarAbaExpAdm('em-campo')">🚚 Em Campo</div>
+    </div>
+  </div>
 
   <!-- VIEW EXPEDIÇÃO -->
   <div id="view-expedicao" style="display:none">
@@ -470,7 +487,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div class="fg">
         <label>Código do item</label>
         <div class="mat-cod-row">
-          <input id="desemb-codigo-manual" placeholder="Toque em 📷 e escaneie o código de barras" readonly>
+          <input id="desemb-codigo-manual" placeholder="Toque em 📷 e escaneie o código de barras" readonly onkeydown="if(event.key==='Enter')confirmarCodigoManual()">
           <button type="button" class="btn-cam" onclick="abrirScannerDesembarque()" title="Escanear código de barras">📷</button>
         </div>
       </div>
@@ -646,6 +663,14 @@ let campoCache = [];
 let desembarqueCarregamentoId = null;
 let desembarqueItens = [];
 
+// Único perfil que pode digitar código de item manualmente (em vez de
+// só escanear) e marcar/desmarcar itens do desembarque tocando na
+// lista — ver renderItens(), renderItensDesembarque() e
+// abrirDesembarque().
+function permiteEntradaManual() {
+  return PERFIL === 'expedicao_administrativo';
+}
+
 // ── HELPER API ────────────────────────────────────────
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -664,6 +689,7 @@ function selPerfil(p) {
   document.getElementById('p-expedicao').classList.toggle('on', p === 'expedicao');
   document.getElementById('p-em_campo').classList.toggle('on', p === 'em_campo');
   document.getElementById('p-almoxarifado').classList.toggle('on', p === 'almoxarifado');
+  document.getElementById('p-expedicao_administrativo').classList.toggle('on', p === 'expedicao_administrativo');
   document.getElementById('auth-pin').style.display = 'block';
   document.getElementById('login-err').textContent = '';
   document.getElementById('pin').value = '';
@@ -721,6 +747,19 @@ function boot() {
     document.getElementById('view-almoxarifado').style.display = 'block';
     carregarCaixas('lista-caixas-almox');
     pollTimer = setInterval(() => carregarCaixas('lista-caixas-almox'), 25000);
+  } else if (PERFIL === 'expedicao_administrativo') {
+    // Reúne as telas de Expedição + Em Campo, separadas por guia
+    // (ver trocarAbaExpAdm) — mesmas telas/funções, só muda a
+    // permissão de digitar código/marcar item manualmente (ver
+    // renderItens, renderItensDesembarque e abrirDesembarque).
+    roleEl.textContent = 'Expedição Administrativo';
+    roleEl.className = 'hrole r-expadm';
+    document.getElementById('expadm-tabs-wrap').style.display = 'block';
+    trocarAbaExpAdm('expedicao');
+    carregarHistorico();
+    carregarCaixas('lista-caixas');
+    carregarCampo();
+    pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); carregarCampo(); }, 25000);
   } else {
     roleEl.textContent = 'Em Campo';
     roleEl.className = 'hrole r-campo';
@@ -728,6 +767,16 @@ function boot() {
     carregarCampo();
     pollTimer = setInterval(carregarCampo, 25000);
   }
+}
+
+// Alterna entre as telas de Expedição e Em Campo dentro do perfil
+// Expedição Administrativo — mesmos blocos/IDs usados pelos perfis
+// Expedição e Em Campo isoladamente, só trocando a visibilidade.
+function trocarAbaExpAdm(tab) {
+  document.getElementById('expadm-tab-expedicao').classList.toggle('on', tab === 'expedicao');
+  document.getElementById('expadm-tab-campo').classList.toggle('on', tab === 'em-campo');
+  document.getElementById('view-expedicao').style.display = tab === 'expedicao' ? 'block' : 'none';
+  document.getElementById('view-em-campo').style.display = tab === 'em-campo' ? 'block' : 'none';
 }
 
 // ── HISTÓRICO ─────────────────────────────────────────
@@ -878,7 +927,11 @@ async function abrirDesembarque(id) {
     document.getElementById('desemb-titulo').textContent = '#' + labelProjeto(c) + ' — ' + c.cidade_destino;
     document.getElementById('desemb-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
     document.getElementById('desemb-responsavel').value = c.desembarque_responsavel || '';
-    document.getElementById('desemb-codigo-manual').value = '';
+    const manual = permiteEntradaManual();
+    const inputCodigo = document.getElementById('desemb-codigo-manual');
+    inputCodigo.value = '';
+    inputCodigo.readOnly = !manual;
+    inputCodigo.placeholder = manual ? 'Digite o código e pressione Enter' : 'Toque em 📷 e escaneie o código de barras';
     renderItensDesembarque();
     abrirModal('mo-desembarque');
   } catch (e) {
@@ -893,8 +946,9 @@ function fecharDesembarque() {
 
 function renderItensDesembarque() {
   const el = document.getElementById('desemb-lista-itens');
+  const manual = permiteEntradaManual();
   el.innerHTML = desembarqueItens.map(i => `
-    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''}">
+    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''} ${manual ? 'clicavel' : ''}" ${manual ? `onclick="toggleItemDesembarque(${i.id})"` : ''}>
       <div class="desemb-item-check">${i.desembarcado_em ? '✓' : ''}</div>
       <div class="desemb-item-info">
         <div class="desemb-item-cod">
@@ -922,12 +976,16 @@ function atualizarProgressoDesembarque() {
   document.getElementById('desemb-progress-label').textContent = `${ok} de ${total} itens conferidos`;
 }
 
-// Único jeito de confirmar um item no desembarque: leitura do código
-// de barras pela câmera (abrirScannerDesembarque → abrirScanner tipo
-// 'desembarque'). Não existe digitação manual nem toque na lista —
-// evita que um item seja dado como descarregado sem ter sido
-// realmente escaneado. Resolve o item pelo código dentro da lista já
-// carregada deste carregamento (evita mais uma chamada ao servidor).
+// Para os perfis Em Campo e Expedição, o único jeito de confirmar um
+// item no desembarque é a leitura do código de barras pela câmera
+// (abrirScannerDesembarque → abrirScanner tipo 'desembarque') — não
+// existe digitação manual nem toque na lista, para evitar que um item
+// seja dado como descarregado sem ter sido realmente escaneado. O
+// perfil Expedição Administrativo é a exceção (ver
+// permiteEntradaManual): também pode digitar o código no campo manual
+// (confirmarCodigoManual) ou tocar direto no item (toggleItemDesembarque).
+// Resolve o item pelo código dentro da lista já carregada deste
+// carregamento (evita mais uma chamada ao servidor).
 async function confirmarCodigoDesembarque(codigo) {
   const item = desembarqueItens.find(i => (i.codigo_item || '').toLowerCase() === codigo.toLowerCase());
   if (!item) { toast('Código não pertence a este carregamento.', true); return; }
@@ -937,6 +995,38 @@ async function confirmarCodigoDesembarque(codigo) {
     item.desembarcado_em = new Date().toISOString();
     renderItensDesembarque();
     toast(`✓ ${item.codigo_item} confirmado.`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// Confirmação por digitação manual do código + Enter — só disponível
+// para o perfil Expedição Administrativo (ver permiteEntradaManual e
+// abrirDesembarque, que deixa o campo readonly para os demais
+// perfis, então o valor sempre chega vazio aqui para eles).
+async function confirmarCodigoManual() {
+  if (!permiteEntradaManual()) return;
+  const input = document.getElementById('desemb-codigo-manual');
+  const codigo = input.value.trim();
+  if (!codigo) return;
+  await confirmarCodigoDesembarque(codigo);
+  input.value = '';
+  input.focus();
+}
+
+// Marca/desmarca manualmente um item como conferido, tocando na linha
+// — só disponível para o perfil Expedição Administrativo (ver
+// permiteEntradaManual e renderItensDesembarque, que só liga este
+// onclick para esse perfil).
+async function toggleItemDesembarque(itemId) {
+  if (!permiteEntradaManual()) return;
+  const item = desembarqueItens.find(i => i.id === itemId);
+  if (!item) return;
+  const novoValor = !item.desembarcado_em;
+  try {
+    await api('PUT', `/carregamentos/${desembarqueCarregamentoId}/desembarque/itens/${itemId}`, { confirmado: novoValor });
+    item.desembarcado_em = novoValor ? new Date().toISOString() : null;
+    renderItensDesembarque();
   } catch (e) {
     toast(e.message, true);
   }
@@ -1379,6 +1469,7 @@ function abrirNovoCarregamento() {
 
 function renderItens() {
   const el = document.getElementById('mat-list');
+  const manual = permiteEntradaManual();
   el.innerHTML = itensAtuais.map((it, idx) => `
     <div class="mat-row">
       <div class="mat-row-top">
@@ -1388,7 +1479,7 @@ function renderItens() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="Toque em 📷 e escaneie o código de barras" value="${escapeAttr(it.codigo_item)}" readonly>
+          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItem(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento',${idx})"` : 'readonly'}>
           <button type="button" class="btn-cam" onclick="abrirScanner('carregamento',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>

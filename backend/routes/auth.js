@@ -3,18 +3,20 @@ const bcrypt = require('bcrypt');
 const jwt    = require('jsonwebtoken');
 
 const NOMES_PERFIL = {
-  expedicao:    'Expedição',
-  em_campo:     'Em Campo',
-  almoxarifado: 'Almoxarifado',
+  expedicao:                'Expedição',
+  em_campo:                 'Em Campo',
+  almoxarifado:             'Almoxarifado',
+  expedicao_administrativo: 'Expedição Administrativo',
 };
 
 const HASH_ENV = {
-  expedicao:    'EXPEDICAO_PASSWORD_HASH',
-  em_campo:     'EM_CAMPO_PASSWORD_HASH',
-  almoxarifado: 'ALMOXARIFADO_PASSWORD_HASH',
+  expedicao:                'EXPEDICAO_PASSWORD_HASH',
+  em_campo:                 'EM_CAMPO_PASSWORD_HASH',
+  almoxarifado:             'ALMOXARIFADO_PASSWORD_HASH',
+  expedicao_administrativo: 'EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH',
 };
 
-// POST /api/auth/login — { perfil: 'expedicao' | 'em_campo' | 'almoxarifado', senha }
+// POST /api/auth/login — { perfil: 'expedicao' | 'em_campo' | 'almoxarifado' | 'expedicao_administrativo', senha }
 router.post('/login', async (req, res) => {
   try {
     const { perfil, senha } = req.body;

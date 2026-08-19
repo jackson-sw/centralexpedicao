@@ -20,8 +20,9 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 - **Expedição** (senha padrão: `exp!2027`) — vê o histórico de carregamentos (e, somente leitura, o de caixas) e pode registrar novos carregamentos.
 - **Almoxarifado** (senha padrão: `Almox0987`) — monta, altera e finaliza as caixas (ver [Fluxo de caixas](#fluxo-de-caixas) abaixo): move os itens pequenos do almoxarifado para o pátio da expedição.
 - **Em Campo** (senha padrão: `emcampo!26`) — confere o desembarque dos carregamentos no destino (ver [Fluxo de desembarque](#fluxo-de-desembarque) abaixo).
+- **Expedição Administrativo** (senha padrão: `Bioc!@09`) — reúne as telas de Expedição e Em Campo num só login, separadas por uma guia no topo. É o único perfil que permite digitar o código de um item manualmente (em vez de só escanear) e marcar/desmarcar itens do desembarque tocando direto na lista — os demais perfis só confirmam por leitura de código de barras.
 
-Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` em `backend/.env`:
+Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` em `backend/.env`:
 
 ```bash
 node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
@@ -132,7 +133,7 @@ Para gerar um novo hash de senha (Expedição ou Em Campo) dentro do próprio co
 
 ```bash
 docker compose exec app node -e "require('bcrypt').hash('SUA_SENHA',12).then(console.log)"
-# copie o hash gerado para EXPEDICAO_PASSWORD_HASH, EM_CAMPO_PASSWORD_HASH ou ALMOXARIFADO_PASSWORD_HASH no .env
+# copie o hash gerado para EXPEDICAO_PASSWORD_HASH, EM_CAMPO_PASSWORD_HASH, ALMOXARIFADO_PASSWORD_HASH ou EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH no .env
 # e rode: docker compose up -d --build
 ```
 
@@ -163,7 +164,7 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
 As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp).
 
@@ -176,6 +177,7 @@ mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcion
 mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # fluxo de Desembarque (perfil Em Campo)
 mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo numero_projeto na etiqueta da caixa
 mysql -u root -p burntech_expedicao < alter_carregamentos_sequencial_projeto.sql  # controle "numero_projeto-sequencial" no romaneio de carregamento
+mysql -u root -p burntech_expedicao < alter_carregamentos_perfil_expedicao_administrativo.sql  # ENUM criado_por_perfil aceita o novo perfil
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

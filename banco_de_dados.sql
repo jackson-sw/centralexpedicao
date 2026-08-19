@@ -29,7 +29,7 @@ CREATE TABLE carregamentos (
   cidade_destino           VARCHAR(150) NOT NULL,
   observacoes              VARCHAR(500) NULL,
   status                   ENUM('em_andamento', 'concluido', 'cancelado') NOT NULL DEFAULT 'concluido',
-  criado_por_perfil        ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'expedicao',
+  criado_por_perfil        ENUM('expedicao', 'em_campo', 'almoxarifado', 'expedicao_administrativo') NOT NULL DEFAULT 'expedicao',
   -- Desembarque (perfil Em Campo): confere item a item, na chegada,
   -- os materiais que saíram no carregamento. "pendente" = ninguém
   -- ainda salvou o desembarque; "parcial" = salvo, mas faltou item;

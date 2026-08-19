@@ -16,8 +16,10 @@ function auth(req, res, next) {
 
 // Bloqueio: só o perfil Expedição pode registrar novos carregamentos.
 // O perfil "Em Campo" (por enquanto) tem acesso apenas de leitura.
+// "Expedição Administrativo" tem as mesmas telas de Expedição + Em Campo
+// (ver frontend), então também passa neste e no próximo bloqueio.
 function apenasExpedicao(req, res, next) {
-  if (req.usuario?.perfil !== 'expedicao') {
+  if (!['expedicao', 'expedicao_administrativo'].includes(req.usuario?.perfil)) {
     return res.status(403).json({ erro: 'Acesso restrito ao perfil Expedição.' });
   }
   next();
@@ -32,8 +34,9 @@ function apenasAlmoxarifado(req, res, next) {
 }
 
 // Bloqueio: só o perfil Em Campo pode conferir itens no desembarque.
+// "Expedição Administrativo" também tem acesso (ver comentário acima).
 function apenasEmCampo(req, res, next) {
-  if (req.usuario?.perfil !== 'em_campo') {
+  if (!['em_campo', 'expedicao_administrativo'].includes(req.usuario?.perfil)) {
     return res.status(403).json({ erro: 'Acesso restrito ao perfil Em Campo.' });
   }
   next();
