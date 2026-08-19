@@ -58,8 +58,9 @@ app.get('*', (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Testa a conexão/autenticação SMTP configurada em backend/.env, sem
-// disparar nenhum e-mail — útil para diagnosticar ROMANEIO_EMAIL_TO
-// "não enviado" sem precisar gerar um romaneio de verdade.
+// disparar nenhum e-mail — útil para diagnosticar ROMANEIO_CAIXA_EMAIL_TO /
+// ROMANEIO_CARREGAMENTO_EMAIL_TO "não enviado" sem precisar gerar um
+// romaneio de verdade.
 // Ex.: curl http://localhost:3002/api/health/mail
 app.get('/api/health/mail', async (req, res) => {
   try {

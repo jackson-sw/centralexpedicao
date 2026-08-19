@@ -27,7 +27,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER}
-      ROMANEIO_EMAIL_TO: ${ROMANEIO_EMAIL_TO:-jackson.weber@burntech.com.br}
+      ROMANEIO_CAIXA_EMAIL_TO: ${ROMANEIO_CAIXA_EMAIL_TO:-leo.neves@burntech.com.br}
+      ROMANEIO_CARREGAMENTO_EMAIL_TO: ${ROMANEIO_CARREGAMENTO_EMAIL_TO:-bruno.ribeiro@burntech.com.br,jackson.weber@burntech.com.br}
       ERP_DB_HOST: ${ERP_DB_HOST}
       ERP_DB_PORT: ${ERP_DB_PORT:-1433}
       ERP_DB_NAME: ${ERP_DB_NAME}

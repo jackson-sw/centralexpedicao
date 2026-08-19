@@ -186,7 +186,7 @@ router.post('/:id/romaneio', auth, async (req, res) => {
 
     let emailEnviado = false;
     let emailErro = '';
-    const destinatarios = (process.env.ROMANEIO_EMAIL_TO || '').trim();
+    const destinatarios = (process.env.ROMANEIO_CARREGAMENTO_EMAIL_TO || '').trim();
     if (destinatarios) {
       try {
         await enviarEmail({
@@ -206,8 +206,8 @@ router.post('/:id/romaneio', auth, async (req, res) => {
         console.error('[POST /carregamentos/:id/romaneio] falha ao enviar e-mail:', mailErr.message);
       }
     } else {
-      emailErro = 'ROMANEIO_EMAIL_TO nao configurado no servidor.';
-      console.warn('[POST /carregamentos/:id/romaneio] ROMANEIO_EMAIL_TO não configurado — e-mail não enviado.');
+      emailErro = 'ROMANEIO_CARREGAMENTO_EMAIL_TO nao configurado no servidor.';
+      console.warn('[POST /carregamentos/:id/romaneio] ROMANEIO_CARREGAMENTO_EMAIL_TO não configurado — e-mail não enviado.');
     }
 
     res.set('Content-Type', 'application/pdf');
@@ -328,7 +328,7 @@ router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) =
 
     let emailEnviado = false;
     let emailErro = '';
-    const destinatarios = (process.env.ROMANEIO_EMAIL_TO || '').trim();
+    const destinatarios = (process.env.ROMANEIO_CARREGAMENTO_EMAIL_TO || '').trim();
     if (destinatarios) {
       try {
         await enviarEmail({
@@ -352,8 +352,8 @@ router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) =
         console.error('[POST /carregamentos/:id/desembarque/romaneio] falha ao enviar e-mail:', mailErr.message);
       }
     } else {
-      emailErro = 'ROMANEIO_EMAIL_TO nao configurado no servidor.';
-      console.warn('[POST /carregamentos/:id/desembarque/romaneio] ROMANEIO_EMAIL_TO não configurado — e-mail não enviado.');
+      emailErro = 'ROMANEIO_CARREGAMENTO_EMAIL_TO nao configurado no servidor.';
+      console.warn('[POST /carregamentos/:id/desembarque/romaneio] ROMANEIO_CARREGAMENTO_EMAIL_TO não configurado — e-mail não enviado.');
     }
 
     res.set('Content-Type', 'application/pdf');

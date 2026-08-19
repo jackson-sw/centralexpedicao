@@ -40,7 +40,7 @@ Uma caixa passa por três estados: **aberta → fechada → expedida**.
 1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
 2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável do Almoxarifado pode adicionar mais itens. Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
 3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta impressa (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras.
-4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_EMAIL_TO`.
+4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_CAIXA_EMAIL_TO`.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
 Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/constants.js` e replicada no `<select>` do frontend): **Kerllon Pereira**, **Léo Neves** e **Filipe Luchtenberg**.
@@ -50,9 +50,9 @@ Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/const
 O perfil **Em Campo** lista todos os carregamentos (com busca por número de projeto no topo da tela) e confere, no destino, se os itens que saíram realmente chegaram.
 
 1. **Desembarque** — abre a tela de conferência de um carregamento: nome do responsável pelo desembarque, barra de progresso e a lista de itens daquele carregamento (cada linha é um item avulso ou uma caixa inteira, do jeito que foi carregada).
-2. **Conferência** — cada item pode ser confirmado de três formas: lendo o código de barras pela câmera (fecha e mostra a confirmação a cada leitura — escaneia de novo pra conferir o próximo item, evitando dúvida sobre se a leitura realmente registrou), digitando o código no campo manual + Enter, ou tocando direto na linha do item (útil quando o código está ilegível). Tocar de novo desfaz a conferência.
+2. **Conferência** — cada item só pode ser confirmado lendo o código de barras pela câmera (fecha e mostra a confirmação a cada leitura — escaneia de novo pra conferir o próximo item, evitando dúvida sobre se a leitura realmente registrou). Não existe digitação manual do código nem toque direto na linha do item — evita que um item seja dado como descarregado sem ter sido realmente escaneado.
 3. **Salvar** — fecha a tela de desembarque e grava o responsável e a data/hora. Se algum item não foi conferido, o sistema avisa quantos estão faltando mas **permite salvar mesmo assim** — o carregamento fica com status `parcial` em vez de `concluido`. É possível reabrir o desembarque depois e continuar de onde parou (nada é perdido ao fechar sem salvar).
-4. **Romaneio de Faltantes** — gera um PDF só com os itens ainda não conferidos (ou uma confirmação de que está tudo certo, se não faltar nada) e envia por e-mail para o(s) destinatário(s) em `ROMANEIO_EMAIL_TO` — disponível a qualquer momento durante a conferência, não precisa ter clicado Salvar antes.
+4. **Romaneio de Faltantes** — gera um PDF só com os itens ainda não conferidos (ou uma confirmação de que está tudo certo, se não faltar nada) e envia por e-mail para o(s) destinatário(s) em `ROMANEIO_CARREGAMENTO_EMAIL_TO` — disponível a qualquer momento durante a conferência, não precisa ter clicado Salvar antes.
 
 Cada card na lista do perfil Em Campo mostra o status do desembarque: **Pendente** (ninguém salvou ainda), **Parcial** (salvo, mas faltou item) ou **Concluído** (salvo com tudo conferido).
 
@@ -163,7 +163,7 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
 As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp).
 
