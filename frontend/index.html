@@ -142,8 +142,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .desemb-progress-bar{height:8px;background:#e9ebef;border-radius:5px;overflow:hidden;margin-bottom:6px;}
 .desemb-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--green),#15803d);border-radius:5px;transition:width .25s;}
 .desemb-progress-label{font-size:12px;color:var(--muted);font-weight:600;}
-.desemb-item{display:flex;align-items:center;gap:12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
-.desemb-item:hover{border-color:var(--border2);}
+.desemb-item{display:flex;align-items:center;gap:12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:8px;transition:all .15s;}
 .desemb-item.ok{background:#f0fdf4;border-color:#bbf7d0;}
 .desemb-item-check{width:26px;height:26px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;transition:all .15s;}
 .desemb-item.ok .desemb-item-check{background:var(--green);border-color:var(--green);}
@@ -469,9 +468,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       </div>
 
       <div class="fg">
-        <label>Ler ou digitar código do item</label>
+        <label>Código do item</label>
         <div class="mat-cod-row">
-          <input id="desemb-codigo-manual" placeholder="Digite o código e pressione Enter" onkeydown="if(event.key==='Enter')confirmarCodigoManual()">
+          <input id="desemb-codigo-manual" placeholder="Toque em 📷 e escaneie o código de barras" readonly>
           <button type="button" class="btn-cam" onclick="abrirScannerDesembarque()" title="Escanear código de barras">📷</button>
         </div>
       </div>
@@ -882,7 +881,6 @@ async function abrirDesembarque(id) {
     document.getElementById('desemb-codigo-manual').value = '';
     renderItensDesembarque();
     abrirModal('mo-desembarque');
-    setTimeout(() => document.getElementById('desemb-codigo-manual').focus(), 150);
   } catch (e) {
     toast(e.message, true);
   }
@@ -896,7 +894,7 @@ function fecharDesembarque() {
 function renderItensDesembarque() {
   const el = document.getElementById('desemb-lista-itens');
   el.innerHTML = desembarqueItens.map(i => `
-    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''}" onclick="toggleItemDesembarque(${i.id})">
+    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''}">
       <div class="desemb-item-check">${i.desembarcado_em ? '✓' : ''}</div>
       <div class="desemb-item-info">
         <div class="desemb-item-cod">
@@ -924,31 +922,12 @@ function atualizarProgressoDesembarque() {
   document.getElementById('desemb-progress-label').textContent = `${ok} de ${total} itens conferidos`;
 }
 
-async function toggleItemDesembarque(itemId) {
-  const item = desembarqueItens.find(i => i.id === itemId);
-  if (!item) return;
-  const novoValor = !item.desembarcado_em;
-  try {
-    await api('PUT', `/carregamentos/${desembarqueCarregamentoId}/desembarque/itens/${itemId}`, { confirmado: novoValor });
-    item.desembarcado_em = novoValor ? new Date().toISOString() : null;
-    renderItensDesembarque();
-  } catch (e) {
-    toast(e.message, true);
-  }
-}
-
-async function confirmarCodigoManual() {
-  const input = document.getElementById('desemb-codigo-manual');
-  const codigo = input.value.trim();
-  if (!codigo) return;
-  await confirmarCodigoDesembarque(codigo);
-  input.value = '';
-  input.focus();
-}
-
-// Usada tanto pelo campo manual quanto pelo scanner contínuo — resolve
-// o item pelo código dentro da lista já carregada deste carregamento
-// (evita mais uma chamada ao servidor por leitura).
+// Único jeito de confirmar um item no desembarque: leitura do código
+// de barras pela câmera (abrirScannerDesembarque → abrirScanner tipo
+// 'desembarque'). Não existe digitação manual nem toque na lista —
+// evita que um item seja dado como descarregado sem ter sido
+// realmente escaneado. Resolve o item pelo código dentro da lista já
+// carregada deste carregamento (evita mais uma chamada ao servidor).
 async function confirmarCodigoDesembarque(codigo) {
   const item = desembarqueItens.find(i => (i.codigo_item || '').toLowerCase() === codigo.toLowerCase());
   if (!item) { toast('Código não pertence a este carregamento.', true); return; }
