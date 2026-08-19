@@ -1388,7 +1388,7 @@ function renderItens() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="Escaneie ou digite o código" value="${escapeAttr(it.codigo_item)}" oninput="atualizaItem(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento',${idx})">
+          <input placeholder="Toque em 📷 e escaneie o código de barras" value="${escapeAttr(it.codigo_item)}" readonly>
           <button type="button" class="btn-cam" onclick="abrirScanner('carregamento',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
