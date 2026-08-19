@@ -33,9 +33,9 @@ Existe ainda um terceiro perfil, **Admin** (senha padrão: `admin!2027`), exclus
 
 Uma caixa passa por três estados: **aberta → fechada → expedida**.
 
-1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens. Ela nasce **aberta** e ainda não tem código de barras.
+1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
 2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável do Almoxarifado pode adicionar mais itens. Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
-3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens.
+3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta impressa (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras.
 4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_EMAIL_TO`.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
@@ -176,6 +176,7 @@ mysql -u root -p burntech_expedicao < alter_view_carregamentos_placa.sql        
 mysql -u root -p burntech_expedicao < alter_carregamento_itens_caixa_item_id.sql  # rastreia responsável por item no romaneio
 mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcional — remove a tabela local, não usada desde a integração com o ERP
 mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # fluxo de Desembarque (perfil Em Campo)
+mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo numero_projeto na etiqueta da caixa
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

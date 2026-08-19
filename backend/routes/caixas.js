@@ -79,7 +79,7 @@ router.get('/:id', auth, async (req, res) => {
 // pode receber mais itens de outros responsáveis via POST /:id/itens.
 router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
   try {
-    const { responsavel_nome, observacoes, itens } = req.body;
+    const { responsavel_nome, numero_projeto, observacoes, itens } = req.body;
 
     if (!responsavelValido(responsavel_nome)) {
       return res.status(400).json({ erro: 'Selecione um responsável válido do Almoxarifado.' });
@@ -99,9 +99,9 @@ router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO caixas (responsavel_nome, observacoes, criado_por_perfil)
-         VALUES (?, ?, ?)`,
-        [responsavel_nome, observacoes || null, req.usuario.perfil]
+        `INSERT INTO caixas (responsavel_nome, numero_projeto, observacoes, criado_por_perfil)
+         VALUES (?, ?, ?, ?)`,
+        [responsavel_nome, (numero_projeto || '').trim() || null, observacoes || null, req.usuario.perfil]
       );
       caixaId = result.insertId;
 
@@ -208,13 +208,14 @@ router.post('/:id/finalizar', auth, apenasAlmoxarifado, async (req, res) => {
       [codigoBarras, caixa.id]
     );
 
-    const [[atualizada]] = await db.query('SELECT fechado_em FROM caixas WHERE id = ?', [caixa.id]);
+    const [[atualizada]] = await db.query('SELECT fechado_em, numero_projeto FROM caixas WHERE id = ?', [caixa.id]);
 
     res.json({
       id: caixa.id,
       status: 'fechada',
       codigo_barras: codigoBarras,
       fechado_em: atualizada.fechado_em,
+      numero_projeto: atualizada.numero_projeto,
       mensagem: 'Caixa finalizada com sucesso.',
     });
   } catch (err) {
