@@ -36,3 +36,6 @@ Thumbs.db
 # Backups e arquivos compactados acidentais
 *.zip
 *.bak
+
+# Scripts locais de conveniência (específicos do computador-ponte, não versionar)
+print-agent/iniciar.bat
