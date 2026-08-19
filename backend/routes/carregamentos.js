@@ -52,10 +52,14 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // POST /api/carregamentos — registrar novo carregamento (Expedição)
+// "finalizar" (boolean, opcional): true encerra o carregamento na hora
+// (status "concluido", igual ao comportamento original); false/ausente
+// deixa em "em_andamento" — pode receber mais itens depois via
+// POST /:id/itens, até ser fechado com POST /:id/finalizar.
 router.post('/', auth, apenasExpedicao, async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { responsavel_nome, numero_projeto, placa, cidade_destino, observacoes, itens } = req.body;
+    const { responsavel_nome, numero_projeto, placa, cidade_destino, observacoes, itens, finalizar } = req.body;
 
     if (!responsavel_nome || !numero_projeto || !placa || !cidade_destino) {
       conn.release();
@@ -91,9 +95,9 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
       sequencialProjeto = total + 1;
       try {
         const [result] = await conn.query(
-          `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, sequencial_projeto, placa, cidade_destino, observacoes, criado_por_perfil)
-           VALUES ('carregamento', ?, ?, ?, ?, ?, ?, ?)`,
-          [responsavel_nome, numero_projeto, sequencialProjeto, placa, cidade_destino, observacoes || null, req.usuario.perfil]
+          `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, sequencial_projeto, placa, cidade_destino, observacoes, status, criado_por_perfil)
+           VALUES ('carregamento', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [responsavel_nome, numero_projeto, sequencialProjeto, placa, cidade_destino, observacoes || null, finalizar ? 'concluido' : 'em_andamento', req.usuario.perfil]
         );
         carregamentoId = result.insertId;
         break;
@@ -132,7 +136,10 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
       id: carregamentoId,
       numero_projeto,
       sequencial_projeto: sequencialProjeto,
-      mensagem: 'Carregamento registrado com sucesso.',
+      status: finalizar ? 'concluido' : 'em_andamento',
+      mensagem: finalizar
+        ? 'Carregamento registrado e finalizado com sucesso.'
+        : 'Carregamento salvo. Use "Finalizar" quando não for mais adicionar itens.',
     });
   } catch (err) {
     await conn.rollback();
@@ -143,15 +150,112 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
   }
 });
 
+// POST /api/carregamentos/:id/itens — "Alterar": adiciona novos itens
+// a um carregamento ainda em andamento (perfil Expedição). Mesma regra
+// de "expedida" da criação: qualquer caixa referenciada nos novos
+// itens também é marcada como expedida.
+router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
+  try {
+    const { itens } = req.body;
+
+    if (!Array.isArray(itens) || itens.length === 0) {
+      return res.status(400).json({ erro: 'Inclua ao menos um item para adicionar.' });
+    }
+    for (const item of itens) {
+      if (!item.codigo_item || !item.descricao || !item.quantidade) {
+        return res.status(400).json({ erro: 'Cada item precisa de código, descrição e quantidade.' });
+      }
+    }
+
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status !== 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento já foi finalizado e não aceita novos itens.' });
+    }
+
+    const [[{ maxOrdem }]] = await db.query(
+      'SELECT COALESCE(MAX(ordem), 0) AS maxOrdem FROM carregamento_itens WHERE carregamento_id = ?',
+      [carregamento.id]
+    );
+
+    const caixaIdsUsadas = new Set();
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      for (let i = 0; i < itens.length; i++) {
+        const caixaId = itens[i].caixa_id || null;
+        const caixaItemId = itens[i].caixa_item_id || null;
+        if (caixaId) caixaIdsUsadas.add(caixaId);
+
+        await conn.query(
+          `INSERT INTO carregamento_itens (carregamento_id, caixa_id, caixa_item_id, codigo_item, descricao, quantidade, ordem)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [carregamento.id, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, maxOrdem + i + 1]
+        );
+      }
+
+      if (caixaIdsUsadas.size) {
+        await conn.query(
+          `UPDATE caixas SET status = 'expedida', expedido_em = NOW()
+           WHERE id IN (?) AND status != 'expedida'`,
+          [Array.from(caixaIdsUsadas)]
+        );
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    res.json({ mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} ao carregamento.` });
+  } catch (err) {
+    console.error('[POST /carregamentos/:id/itens]', err.message);
+    res.status(500).json({ erro: 'Erro ao adicionar itens ao carregamento.' });
+  }
+});
+
+// POST /api/carregamentos/:id/finalizar — encerra o carregamento: a
+// partir daqui POST /:id/itens passa a recusar novos itens.
+router.post('/:id/finalizar', auth, apenasExpedicao, async (req, res) => {
+  try {
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status !== 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento já foi finalizado.' });
+    }
+
+    const [[{ totalItens }]] = await db.query(
+      'SELECT COUNT(*) AS totalItens FROM carregamento_itens WHERE carregamento_id = ?',
+      [carregamento.id]
+    );
+    if (!totalItens) {
+      return res.status(400).json({ erro: 'Adicione ao menos um item antes de finalizar o carregamento.' });
+    }
+
+    await db.query(`UPDATE carregamentos SET status = 'concluido' WHERE id = ?`, [carregamento.id]);
+
+    res.json({ id: carregamento.id, status: 'concluido', mensagem: 'Carregamento finalizado com sucesso.' });
+  } catch (err) {
+    console.error('[POST /carregamentos/:id/finalizar]', err.message);
+    res.status(500).json({ erro: 'Erro ao finalizar carregamento.' });
+  }
+});
+
 // POST /api/carregamentos/:id/romaneio — gera o PDF do romaneio do
 // carregamento (itens + responsável + placa + destino), envia por
 // e-mail e devolve o PDF na resposta para visualização/impressão
-// imediata. Diferente da caixa, o carregamento já nasce completo
-// (não tem estado "aberto"), então o romaneio está sempre disponível.
+// imediata. Só disponível depois de finalizado (mesma regra da
+// caixa: enquanto "em_andamento" a lista de itens ainda pode mudar).
 router.post('/:id/romaneio', auth, async (req, res) => {
   try {
     const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status === 'em_andamento') {
+      return res.status(400).json({ erro: 'Finalize o carregamento antes de gerar o romaneio.' });
+    }
 
     // Responsável de cada linha:
     //  - item herdado de uma caixa já aberta (caixa_item_id preenchido —
@@ -237,6 +341,12 @@ router.put('/:id/desembarque/itens/:itemId', auth, apenasEmCampo, async (req, re
   try {
     const confirmado = req.body.confirmado !== false; // default true
 
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.id]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status === 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento ainda está em andamento — aguarde a Expedição finalizá-lo.' });
+    }
+
     const [[item]] = await db.query(
       'SELECT * FROM carregamento_itens WHERE id = ? AND carregamento_id = ?',
       [req.params.itemId, req.params.id]
@@ -265,8 +375,11 @@ router.post('/:id/desembarque/finalizar', auth, apenasEmCampo, async (req, res) 
       return res.status(400).json({ erro: 'Informe o responsável pelo desembarque.' });
     }
 
-    const [[carregamento]] = await db.query('SELECT id FROM carregamentos WHERE id = ?', [req.params.id]);
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status === 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento ainda está em andamento — aguarde a Expedição finalizá-lo.' });
+    }
 
     const [[{ totalItens, totalConferidos }]] = await db.query(
       `SELECT COUNT(*) AS totalItens, COUNT(desembarcado_em) AS totalConferidos
@@ -306,6 +419,9 @@ router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) =
   try {
     const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status === 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento ainda está em andamento — aguarde a Expedição finalizá-lo.' });
+    }
 
     const [itens] = await db.query(
       `SELECT ci.*, cx.codigo_barras AS caixa_codigo

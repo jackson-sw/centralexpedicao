@@ -121,6 +121,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .cc-badge.pendente{background:#f3f4f6;color:#6b7280;}
 .cc-badge.parcial{background:#fef3c7;color:#92400e;}
 .cc-badge.concluido{background:#dcfce7;color:#166534;}
+.cc-badge.em_andamento{background:#dbeafe;color:#1d4ed8;}
 .cf{display:flex;gap:6px;margin-bottom:5px;font-size:13px;align-items:baseline;}
 .cf-l{color:var(--muted2);min-width:92px;flex-shrink:0;font-size:12px;}
 .cf-v{color:var(--text);font-weight:600;}
@@ -404,7 +405,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">📦 Novo Carregamento</div>
-        <div class="ms">Preencha os dados e a lista de materiais</div>
+        <div class="ms">O carregamento fica "em andamento" e pode receber mais itens depois — use "Finalizar" quando o caminhão estiver pronto para sair.</div>
       </div>
       <button class="mx" onclick="fecharModal('mo-novo')">×</button>
     </div>
@@ -424,7 +425,34 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharModal('mo-novo')">Cancelar</button>
-      <button class="btn btn-red" id="btn-salvar-carregamento" onclick="salvarCarregamento()">Salvar Carregamento</button>
+      <button class="btn btn-out" id="btn-salvar-carregamento" onclick="salvarCarregamento(false)">Salvar Carregamento</button>
+      <button class="btn btn-red" id="btn-finalizar-novo-carregamento" onclick="salvarCarregamento(true)">✅ Finalizar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ALTERAR CARREGAMENTO (adicionar novos itens a um carregamento em andamento) -->
+<div class="overlay" id="mo-carregamento-alterar">
+  <div class="modal">
+    <div class="mh">
+      <div>
+        <div class="mt">✏️ Alterar Carregamento</div>
+        <div class="ms" id="alt-carreg-sub">Adicione novos itens ao carregamento</div>
+      </div>
+      <button class="mx" onclick="fecharModal('mo-carregamento-alterar')">×</button>
+    </div>
+    <div class="mb">
+      <div id="alt-carreg-itens-existentes"></div>
+
+      <div class="mat-head">
+        <label>Novos itens *</label>
+        <button type="button" class="btn-add-round" onclick="addItemCarregAlterar()" title="Adicionar item">+</button>
+      </div>
+      <div id="mat-list-carreg-alterar"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal('mo-carregamento-alterar')">Cancelar</button>
+      <button class="btn btn-blue" id="btn-salvar-carreg-alterar" onclick="salvarAlteracaoCarregamento()">Salvar Alteração</button>
     </div>
   </div>
 </div>
@@ -634,6 +662,8 @@ let abaHistoricoAtual = 'carregamentos';
 let campoCache = [];
 let desembarqueCarregamentoId = null;
 let desembarqueItens = [];
+let alterandoCarregamentoId = null;
+let novosItensCarregAlterar = [];
 
 // Único perfil que pode digitar código de item manualmente (em vez de
 // só escanear) e marcar/desmarcar itens do desembarque tocando na
@@ -786,7 +816,7 @@ function renderLista(lista) {
           <div class="cc-proj">#${labelProjeto(c)}</div>
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
-        <span class="cc-badge">${c.tipo === 'carregamento' ? 'Carregamento' : 'Descarregamento'}</span>
+        <span class="cc-badge ${c.status}">${labelStatusCarregamento(c.status)}</span>
       </div>
       <div class="cf"><span class="cf-l">Placa</span><span class="cf-v">${escapeHtml(c.placa)}</span></div>
       <div class="cf"><span class="cf-l">Destino</span><span class="cf-v">${escapeHtml(c.cidade_destino)}</span></div>
@@ -798,11 +828,17 @@ function renderLista(lista) {
   `).join('');
 }
 
+function labelStatusCarregamento(status) {
+  if (status === 'em_andamento') return 'Em andamento';
+  if (status === 'cancelado')    return 'Cancelado';
+  return 'Concluído';
+}
+
 async function verDetalhe(id) {
   try {
     const c = await api('GET', '/carregamentos/' + id);
     document.getElementById('det-titulo').textContent = '#' + labelProjeto(c) + ' — ' + c.cidade_destino;
-    document.getElementById('det-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
+    document.getElementById('det-sub').textContent = labelStatusCarregamento(c.status) + ' · ' + c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
     document.getElementById('det-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
       ${c.itens.map(i => `
@@ -816,14 +852,28 @@ async function verDetalhe(id) {
         </div>
       `).join('')}
     `;
-    document.getElementById('det-footer').innerHTML = `
-      <button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>
-      <button class="btn btn-blue" id="btn-romaneio-carreg-${c.id}" onclick="gerarRomaneioCarregamento(${c.id})">🧾 Romaneio</button>
-    `;
+    renderFooterCarregamentoDetalhe(c);
     abrirModal('mo-detalhe');
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+function podeGerenciarCarregamento() {
+  return PERFIL === 'expedicao' || PERFIL === 'expedicao_administrativo';
+}
+
+function renderFooterCarregamentoDetalhe(c) {
+  const footer = document.getElementById('det-footer');
+  let botoes = '';
+  if (podeGerenciarCarregamento() && c.status === 'em_andamento') {
+    botoes += `<button class="btn btn-out" onclick="abrirAlterarCarregamento(${c.id})">✏️ Alterar</button>`;
+    botoes += `<button class="btn btn-blue" onclick="finalizarCarregamento(${c.id})">✅ Finalizar</button>`;
+  }
+  if (c.status !== 'em_andamento') {
+    botoes += `<button class="btn btn-blue" id="btn-romaneio-carreg-${c.id}" onclick="gerarRomaneioCarregamento(${c.id})">🧾 Romaneio</button>`;
+  }
+  footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-detalhe')">Fechar</button>${botoes}`;
 }
 
 function trocarAbaHistorico(tab) {
@@ -843,7 +893,10 @@ function trocarAbaHistorico(tab) {
 async function carregarCampo() {
   try {
     const lista = await api('GET', '/carregamentos');
-    campoCache = lista;
+    // Carregamentos "em andamento" (ainda sendo montados pela Expedição,
+    // não finalizados) não aparecem aqui — nada saiu do pátio ainda,
+    // então não há o que conferir no desembarque.
+    campoCache = lista.filter(c => c.status !== 'em_andamento');
     filtrarCampo();
   } catch (e) {
     if (!campoCache.length) {
@@ -1500,7 +1553,12 @@ function removeItemRow(idx) {
   renderItens();
 }
 
-async function salvarCarregamento() {
+// finalizar=false → "Salvar Carregamento": grava e fecha a janela, mas
+// deixa o carregamento "em andamento" (pode receber mais itens depois
+// via "Alterar", no detalhe). finalizar=true → "Finalizar": grava já
+// encerrado, pronto para romaneio/desembarque, igual ao comportamento
+// original (não aceita mais itens depois).
+async function salvarCarregamento(finalizar) {
   const responsavel_nome = document.getElementById('nc-responsavel').value.trim();
   const numero_projeto   = document.getElementById('nc-projeto').value.trim();
   const placa             = document.getElementById('nc-placa').value.trim().toUpperCase();
@@ -1515,26 +1573,171 @@ async function salvarCarregamento() {
 
   if (!itens.length) { toast('Inclua ao menos um item válido na lista de materiais.', true); return; }
 
-  const btn = document.getElementById('btn-salvar-carregamento');
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  const btnSalvar = document.getElementById('btn-salvar-carregamento');
+  const btnFinalizar = document.getElementById('btn-finalizar-novo-carregamento');
+  const btnClicado = finalizar ? btnFinalizar : btnSalvar;
+  const textoOriginal = btnClicado.textContent;
+  btnSalvar.disabled = true; btnFinalizar.disabled = true;
+  btnClicado.textContent = 'Salvando...';
   try {
-    const data = await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens });
-    toast(`Carregamento #${labelProjeto(data)} registrado com sucesso.`);
+    const data = await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens, finalizar });
+    toast(finalizar
+      ? `Carregamento #${labelProjeto(data)} registrado e finalizado com sucesso.`
+      : `Carregamento #${labelProjeto(data)} salvo. Use "Alterar" no detalhe para adicionar mais itens depois.`);
     fecharModal('mo-novo');
     carregarHistorico();
   } catch (e) {
     toast(e.message, true);
   } finally {
-    btn.disabled = false; btn.textContent = 'Salvar Carregamento';
+    btnSalvar.disabled = false; btnFinalizar.disabled = false;
+    btnClicado.textContent = textoOriginal;
+  }
+}
+
+// ── ALTERAR CARREGAMENTO (adicionar itens a um carregamento em andamento) ──
+async function abrirAlterarCarregamento(id) {
+  try {
+    const c = await api('GET', '/carregamentos/' + id);
+    alterandoCarregamentoId = id;
+    document.getElementById('alt-carreg-sub').textContent =
+      '#' + labelProjeto(c) + ' — os itens já cadastrados estão listados abaixo; adicione os novos.';
+    document.getElementById('alt-carreg-itens-existentes').innerHTML = `
+      <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
+      ${c.itens.map(i => `
+        <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
+            <span class="cc-itens-count">${i.quantidade}x</span>
+          </div>
+          <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
+          ${i.caixa_id ? `<div class="cc-from-box">🧰 Item da caixa #${i.caixa_id}</div>` : ''}
+        </div>
+      `).join('')}
+    `;
+    novosItensCarregAlterar = [{ codigo_item: '', descricao: '', quantidade: 1 }];
+    renderItensCarregAlterar();
+    fecharModal('mo-detalhe');
+    abrirModal('mo-carregamento-alterar');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function renderItensCarregAlterar() {
+  const el = document.getElementById('mat-list-carreg-alterar');
+  const manual = permiteEntradaManual();
+  el.innerHTML = novosItensCarregAlterar.map((it, idx) => `
+    <div class="mat-row">
+      <div class="mat-row-top">
+        <span class="mat-row-num">Novo item ${idx + 1}</span>
+        ${novosItensCarregAlterar.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemCarregAlterar(${idx})" title="Remover item">×</button>` : ''}
+      </div>
+      <div class="fg" style="margin-bottom:8px">
+        <label>Código do item *</label>
+        <div class="mat-cod-row">
+          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItemCarregAlterar(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento-alterar',${idx})"` : 'readonly'}>
+          <button type="button" class="btn-cam" onclick="abrirScanner('carregamento-alterar',${idx})" title="Escanear código de barras">📷</button>
+        </div>
+      </div>
+      <div class="mat-fr">
+        <div class="fg" style="margin-bottom:0">
+          <label>Descrição *</label>
+          <input id="descricao-carregamento-alterar-${idx}" placeholder="Descrição do item" value="${escapeAttr(it.descricao)}" oninput="atualizaItemCarregAlterar(${idx},'descricao',this.value)">
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label>Quantidade *</label>
+          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCarregAlterar(${idx},'quantidade',this.value)">
+        </div>
+      </div>
+      ${it.caixa_id ? `<div class="cc-from-box">🧰 Veio da caixa ${escapeHtml(it.caixa_codigo || '')}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function atualizaItemCarregAlterar(idx, campo, valor) {
+  novosItensCarregAlterar[idx][campo] = valor;
+  if (campo === 'codigo_item') { novosItensCarregAlterar[idx].caixa_id = null; novosItensCarregAlterar[idx].caixa_item_id = null; }
+}
+
+function addItemCarregAlterar() {
+  novosItensCarregAlterar.push({ codigo_item: '', descricao: '', quantidade: 1 });
+  renderItensCarregAlterar();
+}
+
+function removeItemCarregAlterar(idx) {
+  novosItensCarregAlterar.splice(idx, 1);
+  renderItensCarregAlterar();
+}
+
+// Igual a processarCodigoCarregamento (Novo Carregamento): se o código
+// lido corresponder a uma caixa fechada do Almoxarifado, adiciona ela
+// inteira como uma única linha; senão trata como item avulso normal.
+async function processarCodigoCarregAlterar(idx, codigo) {
+  try {
+    const caixa = await api('GET', '/caixas/codigo/' + encodeURIComponent(codigo));
+    if (caixa.status === 'expedida') {
+      toast('Atenção: esta caixa já foi expedida em outro carregamento.', true);
+    }
+    novosItensCarregAlterar.splice(idx, 1, {
+      codigo_item: caixa.codigo_barras,
+      descricao: 'Caixa contendo itens',
+      quantidade: 1,
+      caixa_id: caixa.id,
+      caixa_item_id: null,
+      caixa_codigo: caixa.codigo_barras,
+    });
+    renderItensCarregAlterar();
+    toast(`Caixa ${caixa.codigo_barras} adicionada ao carregamento.`);
+  } catch (e) {
+    atualizaItemCarregAlterar(idx, 'codigo_item', codigo);
+    renderItensCarregAlterar();
+    preencherDescricaoPorCodigo('carregamento-alterar', idx);
+    toast('Código lido: ' + codigo);
+  }
+}
+
+async function salvarAlteracaoCarregamento() {
+  const itens = novosItensCarregAlterar
+    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null, caixa_item_id: i.caixa_item_id || null }))
+    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
+
+  if (!itens.length) { toast('Inclua ao menos um novo item.', true); return; }
+
+  const btn = document.getElementById('btn-salvar-carreg-alterar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const data = await api('POST', `/carregamentos/${alterandoCarregamentoId}/itens`, { itens });
+    toast(data.mensagem || 'Itens adicionados.');
+    fecharModal('mo-carregamento-alterar');
+    carregarHistorico();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar Alteração';
+  }
+}
+
+// ── FINALIZAR CARREGAMENTO ──────────────────────────────
+async function finalizarCarregamento(id) {
+  if (!confirm('Finalizar este carregamento? Depois de finalizado não será mais possível adicionar itens.')) return;
+  try {
+    await api('POST', `/carregamentos/${id}/finalizar`, {});
+    toast('Carregamento finalizado com sucesso.');
+    fecharModal('mo-detalhe');
+    carregarHistorico();
+  } catch (e) {
+    toast(e.message, true);
   }
 }
 
 // ── SCANNER DE CÓDIGO DE BARRAS ───────────────────────
-// tipo: 'carregamento' (pode ser um item avulso OU o código de uma
-// caixa inteira, que expande em N itens), 'caixa' (item avulso sendo
-// cadastrado dentro de uma Nova Caixa), 'alterar' (item avulso sendo
-// adicionado a uma caixa já aberta, via "Alterar") ou 'desembarque'
-// (conferência no perfil Em Campo). Fecha sempre após uma leitura —
+// tipo: 'carregamento' ou 'carregamento-alterar' (podem ser um item
+// avulso OU o código de uma caixa inteira, que expande em N itens —
+// o primeiro dentro de "Novo Carregamento", o segundo dentro de
+// "Alterar Carregamento"), 'caixa' (item avulso sendo cadastrado
+// dentro de uma Nova Caixa), 'alterar' (item avulso sendo adicionado
+// a uma caixa já aberta, via "Alterar") ou 'desembarque' (conferência
+// no perfil Em Campo). Fecha sempre após uma leitura —
 // no desembarque isso é proposital: dá pra ver a confirmação do item
 // antes de decidir escanear o próximo, evitando dúvida sobre se a
 // leitura realmente "pegou".
@@ -1567,6 +1770,8 @@ async function abrirScanner(tipo, idx) {
           toast('Código lido: ' + decodedText);
         } else if (ctx.tipo === 'desembarque') {
           confirmarCodigoDesembarque(decodedText);
+        } else if (ctx.tipo === 'carregamento-alterar') {
+          processarCodigoCarregAlterar(ctx.idx, decodedText);
         } else {
           processarCodigoCarregamento(ctx.idx, decodedText);
         }
@@ -1615,9 +1820,10 @@ async function processarCodigoCarregamento(idx, codigo) {
 // no painel administrativo (itens_materiais) e preenche a descrição
 // automaticamente — sem sobrescrever uma descrição já digitada.
 async function preencherDescricaoPorCodigo(tipo, idx) {
-  const arr = tipo === 'carregamento' ? itensAtuais
-            : tipo === 'caixa'        ? caixaItensAtuais
-            : tipo === 'alterar'      ? novosItensAlterar
+  const arr = tipo === 'carregamento'          ? itensAtuais
+            : tipo === 'caixa'                 ? caixaItensAtuais
+            : tipo === 'alterar'               ? novosItensAlterar
+            : tipo === 'carregamento-alterar'  ? novosItensCarregAlterar
             : null;
   if (!arr) return;
 

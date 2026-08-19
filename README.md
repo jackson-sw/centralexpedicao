@@ -35,6 +35,14 @@ Existe ainda um terceiro perfil, **Admin** (senha padrão: `admin!2027`), exclus
 
 Cada carregamento é identificado por `numero_projeto` + `sequencial_projeto`, exibido nas telas, PDFs e e-mails de romaneio como **"numero_projeto-sequencial_projeto"** (ex.: `240092-1`, `240092-2`). O `sequencial_projeto` é calculado automaticamente pelo backend a cada "Novo Carregamento" — começa em `1` para o primeiro carregamento daquele número de projeto e incrementa a cada carregamento novo com o mesmo número, permitindo registrar mais de uma carga para o mesmo projeto (ex.: em dias diferentes) sem sobrescrever o controle. O usuário só digita o número do projeto; o sequencial não é um campo do formulário.
 
+Um carregamento passa por dois estados: **em andamento → concluído** (mesmo modelo de aberta/fechada usado pelas caixas):
+
+1. **Salvar Carregamento** (tela "Novo Carregamento", perfil Expedição/Expedição Administrativo) — grava o carregamento com os itens já preenchidos e fecha a janela, mas deixa o status **em andamento**: ainda aceita mais itens depois.
+2. **Alterar** — no detalhe de um carregamento em andamento, adiciona mais itens (inclusive lendo o código de uma caixa inteira do Almoxarifado, igual funciona em "Novo Carregamento").
+3. **Finalizar** — disponível tanto direto em "Novo Carregamento" (cria já fechado, pulando o passo "em andamento") quanto no detalhe de um carregamento em andamento. Encerra o carregamento: a partir daqui não aceita mais itens, e Romaneio/Desembarque passam a ficar disponíveis.
+
+Enquanto um carregamento está **em andamento**, ele não aparece na lista do perfil Em Campo (nada saiu do pátio ainda) e o Romaneio fica bloqueado — mesma regra de bloqueio que já vale para caixas ainda abertas.
+
 ## Fluxo de caixas
 
 Uma caixa passa por três estados: **aberta → fechada → expedida**.
