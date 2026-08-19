@@ -169,15 +169,9 @@ As configurações SMTP em `backend/mail.js` são usadas para enviar automaticam
 
 ## Atualizando um banco já existente
 
-Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql`, rode manualmente os scripts incrementais que ainda não foram aplicados, na ordem:
+Se o banco já foi provisionado com uma versão anterior do `banco_de_dados.sql`, rode manualmente os scripts incrementais que ainda não foram aplicados, na ordem. (Scripts mais antigos que este ponto — perfil Almoxarifado, fluxo de caixas, placa no carregamento, etc. — já foram removidos do repositório por estarem totalmente mesclados no `banco_de_dados.sql`; se precisar deles para um banco muito desatualizado, consulte o histórico do git ou provisiona um banco novo direto do `banco_de_dados.sql` atual.)
 
 ```bash
-mysql -u root -p burntech_expedicao < alter_almoxarifado.sql            # perfil Almoxarifado
-mysql -u root -p burntech_expedicao < alter_itens_materiais_quantidade.sql  # campo Quantidade no catálogo (legado, ver abaixo)
-mysql -u root -p burntech_expedicao < alter_caixas_workflow.sql         # fluxo aberta/fechada + responsável por item
-mysql -u root -p burntech_expedicao < alter_carregamentos_placa.sql     # campo Placa no carregamento
-mysql -u root -p burntech_expedicao < alter_view_carregamentos_placa.sql          # corrige view sem a coluna placa
-mysql -u root -p burntech_expedicao < alter_carregamento_itens_caixa_item_id.sql  # rastreia responsável por item no romaneio
 mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcional — remove a tabela local, não usada desde a integração com o ERP
 mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # fluxo de Desembarque (perfil Em Campo)
 mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo numero_projeto na etiqueta da caixa
