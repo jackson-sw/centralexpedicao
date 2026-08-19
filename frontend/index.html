@@ -203,30 +203,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 .scanner-hint{padding:12px 18px 18px;color:#d1d5db;font-size:12.5px;text-align:center;}
 .scanner-fallback{padding:0 18px 18px;}
 
-/* ── ETIQUETA DE IMPRESSÃO (Nova Caixa) ──────────────
-   Tamanho fixo 100mm x 70mm (10cm x 7cm) — impressora de etiquetas. */
-@page{size:100mm 70mm;margin:0;}
-#print-label-area{display:none;}
-.print-label{
-  width:100mm;height:70mm;box-sizing:border-box;
-  padding:3.5mm 6mm;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:1.6mm;
-  text-align:center;overflow:hidden;
-}
-.print-label-brand{font-size:2.7mm;font-weight:800;letter-spacing:.2mm;line-height:1.2;}
-.print-label-projeto{font-size:3.2mm;font-weight:700;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:88mm;}
+/* ── ETIQUETA (Nova Caixa) ────────────────────────────
+   A impressão física agora é feita pelo servidor + agente local
+   (fila etiqueta_fila, ver backend/routes/etiquetas.js) — não há
+   mais window.print() no navegador. .print-label-code segue aqui
+   porque é reaproveitada no preview em tela do código de barras
+   (#barcode-preview-code, dentro do modal mo-caixa-resultado). */
 .print-label-code{font-family:monospace;font-weight:800;font-size:4.2mm;letter-spacing:1mm;}
-.print-label-fechado{font-size:2.4mm;font-weight:500;color:#333;line-height:1.15;}
-#barcode-print{width:74mm;max-width:100%;height:auto;}
-@media print{
-  /* display:none (em vez de visibility:hidden) remove o restante do app do
-     fluxo do documento — senão a altura total da página (login + app +
-     todos os modais) sobra além dos 70mm da etiqueta e o navegador imprime
-     uma segunda folha em branco (ou uma segunda etiqueta) para "caber" o
-     conteúdo invisível. */
-  body > *:not(#print-label-area){display:none !important;}
-  #print-label-area{display:block !important;width:100mm;height:70mm;margin:0;}
-}
 
 /* ── TOAST ─────────────────────────────────────────── */
 .toast{position:fixed;bottom:calc(20px + var(--safe-bottom));left:50%;transform:translate(-50%,50px);background:var(--text);color:#fff;border-radius:10px;padding:12px 20px;font-size:13.5px;font-weight:500;z-index:200;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);}
@@ -558,7 +541,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharResultadoCaixa()">Concluir</button>
-      <button class="btn btn-blue" onclick="imprimirEtiquetaCaixa()">🖨️ Imprimir Etiqueta</button>
+      <button class="btn btn-blue" id="btn-imprimir-etiqueta-resultado" onclick="imprimirEtiquetaCaixa()">🖨️ Imprimir Etiqueta</button>
     </div>
   </div>
 </div>
@@ -613,17 +596,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <button class="btn btn-out" onclick="fecharModal('mo-caixa-alterar')">Cancelar</button>
       <button class="btn btn-blue" id="btn-salvar-alterar" onclick="salvarAlteracaoCaixa()">Salvar Alteração</button>
     </div>
-  </div>
-</div>
-
-<!-- ÁREA OCULTA USADA APENAS NA IMPRESSÃO DA ETIQUETA -->
-<div id="print-label-area">
-  <div class="print-label">
-    <div class="print-label-brand">BURNTECH CALDEIRAS — CENTRAL EXPEDIÇÃO</div>
-    <div class="print-label-projeto" id="print-label-projeto"></div>
-    <svg id="barcode-print"></svg>
-    <div class="print-label-code" id="print-label-code"></div>
-    <div class="print-label-fechado" id="print-label-fechado"></div>
   </div>
 </div>
 
@@ -1158,7 +1130,11 @@ function renderFooterCaixaDetalhe(c) {
     botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
   }
   if (c.status !== 'aberta') {
-    botoes += `<button class="btn btn-out" onclick="reimprimirEtiquetaCaixa('${escapeAttr(c.codigo_barras)}','${escapeAttr(c.numero_projeto || '')}','${escapeAttr(c.fechado_em || '')}')">🖨️ Reimprimir</button>`;
+    // Só Almoxarifado e Expedição têm impressora Argox configurada
+    // (ver permiteImprimirEtiqueta) — os demais perfis só veem Romaneio.
+    if (permiteImprimirEtiqueta()) {
+      botoes += `<button class="btn btn-out" id="btn-reimprimir-${c.id}" onclick="reimprimirEtiquetaCaixa(${c.id})">🖨️ Reimprimir</button>`;
+    }
     botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
   }
   footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>${botoes}`;
@@ -1427,33 +1403,42 @@ function fecharResultadoCaixa() {
   fecharModal('mo-caixa-resultado');
 }
 
+// Só Almoxarifado e Expedição têm impressora Argox configurada no
+// servidor (ver backend/routes/etiquetas.js) — os outros perfis nem
+// veem o botão de imprimir/reimprimir etiqueta.
+function permiteImprimirEtiqueta() {
+  return PERFIL === 'almoxarifado' || PERFIL === 'expedicao';
+}
+
 function imprimirEtiquetaCaixa() {
   if (!ultimaCaixaGerada) return;
-  imprimirEtiquetaPorCodigo(ultimaCaixaGerada.codigo_barras, ultimaCaixaGerada.numero_projeto, ultimaCaixaGerada.fechado_em);
+  enfileirarEtiqueta(ultimaCaixaGerada.id, 'btn-imprimir-etiqueta-resultado');
 }
 
 // Reimpressão da etiqueta de uma caixa já finalizada, a partir do
 // detalhe da caixa (útil quando a etiqueta original foi perdida/danificada).
-function reimprimirEtiquetaCaixa(codigo, numeroProjeto, fechadoEm) {
-  if (!codigo) { toast('Esta caixa ainda não tem código de barras.', true); return; }
-  imprimirEtiquetaPorCodigo(codigo, numeroProjeto, fechadoEm);
+function reimprimirEtiquetaCaixa(caixaId) {
+  enfileirarEtiqueta(caixaId, `btn-reimprimir-${caixaId}`);
 }
 
-function imprimirEtiquetaPorCodigo(codigo, numeroProjeto, fechadoEm) {
-  document.getElementById('print-label-code').textContent = codigo;
-
-  const projetoEl = document.getElementById('print-label-projeto');
-  projetoEl.textContent = numeroProjeto ? ('Projeto: ' + numeroProjeto) : '';
-  projetoEl.style.display = numeroProjeto ? '' : 'none';
-
-  const fechadoEl = document.getElementById('print-label-fechado');
-  fechadoEl.textContent = fechadoEm ? ('Fechada em: ' + fmtDT(fechadoEm)) : '';
-  fechadoEl.style.display = fechadoEm ? '' : 'none';
-
+// Enfileira a impressão física da etiqueta no servidor — o PDF (com
+// código de barras) é gerado lá e a impressão de verdade é feita por
+// um agente local, rodando no computador ligado às Argox (uma para
+// Almoxarifado, outra para Expedição — ver print-agent/). Não usa
+// mais window.print(): o navegador só confirma que o pedido foi
+// enviado, a etiqueta sai sozinha do outro lado.
+async function enfileirarEtiqueta(caixaId, btnId) {
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const textoOriginal = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
-    JsBarcode('#barcode-print', codigo, { format: 'CODE128', width: 2, height: 55, displayValue: false, margin: 4 });
-  } catch (e) {}
-  window.print();
+    const data = await api('POST', '/etiquetas', { caixa_id: caixaId });
+    toast(data.mensagem || 'Etiqueta enviada para a impressora.');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
+  }
 }
 
 // ── NOVO CARREGAMENTO ─────────────────────────────────

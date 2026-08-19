@@ -1,0 +1,18 @@
+{
+  "name": "centralexpedicao-print-agent",
+  "version": "1.0.0",
+  "description": "Agente local que imprime etiquetas de caixa (Central Expedição) nas impressoras Argox ligadas ao computador-ponte.",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pdf-to-printer": "^5.8.0"
+  }
+}

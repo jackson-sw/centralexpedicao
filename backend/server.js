@@ -8,6 +8,7 @@ const authRoutes           = require('./routes/auth');
 const carregamentosRoutes  = require('./routes/carregamentos');
 const caixasRoutes         = require('./routes/caixas');
 const itensMateriaisRoutes = require('./routes/itensMateriais');
+const etiquetasRoutes      = require('./routes/etiquetas');
 const { verificarConexao } = require('./mail');
 const { getPool: getPoolErp } = require('./dbErp');
 
@@ -44,6 +45,7 @@ app.use('/api/auth',           authRoutes);
 app.use('/api/carregamentos',  carregamentosRoutes);
 app.use('/api/caixas',         caixasRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);
+app.use('/api/etiquetas',      etiquetasRoutes);
 
 // ── Serve o frontend estático em produção ─────────────────────
 app.use(express.static(path.join(__dirname, '../frontend')));

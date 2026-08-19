@@ -76,6 +76,33 @@ CREATE TABLE caixas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Tabela: etiqueta_fila
+-- Fila de impressão física da etiqueta da caixa (impressoras Argox,
+-- uma por perfil — Almoxarifado e Expedição). O app só enfileira
+-- (POST /api/etiquetas); um agente local, rodando no computador
+-- ligado às impressoras, consulta esta fila periodicamente
+-- (GET /api/etiquetas/pendentes), baixa o PDF já pronto da etiqueta
+-- e imprime silenciosamente, marcando o resultado de volta.
+-- ------------------------------------------------------------
+CREATE TABLE etiqueta_fila (
+  id                     INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  caixa_id               INT UNSIGNED NOT NULL,
+  impressora             VARCHAR(100) NOT NULL,
+  solicitado_por_perfil  ENUM('almoxarifado', 'expedicao') NOT NULL,
+  status                 ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
+  erro_msg               VARCHAR(300) NULL,
+  criado_em              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  impresso_em            DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_etiqueta_fila_status (status),
+  KEY idx_etiqueta_fila_caixa_id (caixa_id),
+  CONSTRAINT fk_etiqueta_fila_caixa
+    FOREIGN KEY (caixa_id) REFERENCES caixas(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Tabela: caixa_itens
 -- Relação um-para-muitos: cada caixa contém N materiais pequenos,
 -- cada um com seu próprio código de barras individual. Guarda quem

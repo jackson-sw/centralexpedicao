@@ -10,6 +10,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 - `frontend/manifest.json` + `frontend/service-worker.js` — configuração PWA (instalável, com cache do app shell).
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
+- `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta — ver [Impressão de etiquetas](#impressão-de-etiquetas).
 
 O backend serve o frontend estaticamente — em produção tudo roda em um único processo Node em uma única porta.
 
@@ -40,7 +41,7 @@ Uma caixa passa por três estados: **aberta → fechada → expedida**.
 
 1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
 2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável do Almoxarifado pode adicionar mais itens. Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
-3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta impressa (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras.
+3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras — ver [Impressão de etiquetas](#impressão-de-etiquetas) para como ela sai fisicamente na impressora.
 4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_CAIXA_EMAIL_TO`.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
@@ -56,6 +57,17 @@ O perfil **Em Campo** lista todos os carregamentos (com busca por número de pro
 4. **Romaneio de Faltantes** — gera um PDF só com os itens ainda não conferidos (ou uma confirmação de que está tudo certo, se não faltar nada) e envia por e-mail para o(s) destinatário(s) em `ROMANEIO_CARREGAMENTO_EMAIL_TO` — disponível a qualquer momento durante a conferência, não precisa ter clicado Salvar antes.
 
 Cada card na lista do perfil Em Campo mostra o status do desembarque: **Pendente** (ninguém salvou ainda), **Parcial** (salvo, mas faltou item) ou **Concluído** (salvo com tudo conferido).
+
+## Impressão de etiquetas
+
+As etiquetas de caixa (100mm × 70mm, com código de barras) saem direto nas impressoras térmicas **Argox OS-214 Plus** — uma dedicada ao perfil Almoxarifado, outra ao perfil Expedição — sem diálogo de impressão e sem depender do navegador do celular imprimir nada.
+
+Como o backend fica hospedado numa VPS na nuvem e não tem acesso direto às impressoras (que estão na rede local da empresa, ligadas por USB a um computador sempre ligado), a impressão funciona em duas partes:
+
+1. **Servidor** — ao clicar em "🖨️ Imprimir Etiqueta" ou "🖨️ Reimprimir" (visível só para Almoxarifado e Expedição), o app chama `POST /api/etiquetas`, que gera o PDF da etiqueta (`backend/pdf/etiqueta.js`, com o código de barras via `bwip-js`) e grava um pedido pendente na tabela `etiqueta_fila`, associado à impressora daquele perfil (`IMPRESSORA_ALMOXARIFADO_NOME` / `IMPRESSORA_EXPEDICAO_NOME`).
+2. **Agente local** (`print-agent/`) — um script Node separado, rodando no computador ligado às impressoras (o "computador-ponte"), consulta `GET /api/etiquetas/pendentes` a cada poucos segundos, baixa o PDF pronto e manda pra impressora Argox correta usando `pdf-to-printer` (que já embute o SumatraPDF — não precisa instalar nada além do Node). Depois reporta sucesso/erro de volta pro servidor. Ver `print-agent/README.md` para instalação e configuração para iniciar junto com o Windows.
+
+As rotas `/api/etiquetas/pendentes`, `/api/etiquetas/:id/pdf`, `/api/etiquetas/:id/concluido` e `/api/etiquetas/:id/erro` não usam o JWT dos perfis — são autenticadas por uma chave fixa (`AGENT_API_KEY`, header `X-Agent-Key`) compartilhada apenas entre o servidor e o agente local, já que ele não é uma pessoa logada no app.
 
 ## Painel Administrativo (`/admin`)
 
@@ -164,9 +176,9 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
-As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp).
+As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas — ver [Impressão de etiquetas](#impressão-de-etiquetas).
 
 ## Atualizando um banco já existente
 
@@ -178,6 +190,7 @@ mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # flux
 mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo numero_projeto na etiqueta da caixa
 mysql -u root -p burntech_expedicao < alter_carregamentos_sequencial_projeto.sql  # controle "numero_projeto-sequencial" no romaneio de carregamento
 mysql -u root -p burntech_expedicao < alter_carregamentos_perfil_expedicao_administrativo.sql  # ENUM criado_por_perfil aceita o novo perfil
+mysql -u root -p burntech_expedicao < alter_etiqueta_fila.sql  # fila de impressão de etiquetas (Argox)
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)
