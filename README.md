@@ -29,6 +29,10 @@ node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
 
 Existe ainda um terceiro perfil, **Admin** (senha padrão: `admin!2027`), exclusivo do painel administrativo em `/admin` — não aparece na tela de login do app, tem sua própria página e usa `ADMIN_PASSWORD_HASH` no `.env`. Diferente dos perfis Expedição/Em Campo, o token do admin não fica salvo no navegador (`localStorage`) — é preciso logar a cada acesso ao painel, por segurança.
 
+## Fluxo de carregamento
+
+Cada carregamento é identificado por `numero_projeto` + `sequencial_projeto`, exibido nas telas, PDFs e e-mails de romaneio como **"numero_projeto-sequencial_projeto"** (ex.: `240092-1`, `240092-2`). O `sequencial_projeto` é calculado automaticamente pelo backend a cada "Novo Carregamento" — começa em `1` para o primeiro carregamento daquele número de projeto e incrementa a cada carregamento novo com o mesmo número, permitindo registrar mais de uma carga para o mesmo projeto (ex.: em dias diferentes) sem sobrescrever o controle. O usuário só digita o número do projeto; o sequencial não é um campo do formulário.
+
 ## Fluxo de caixas
 
 Uma caixa passa por três estados: **aberta → fechada → expedida**.
@@ -177,6 +181,7 @@ mysql -u root -p burntech_expedicao < alter_carregamento_itens_caixa_item_id.sql
 mysql -u root -p burntech_expedicao < alter_remover_itens_materiais.sql # opcional — remove a tabela local, não usada desde a integração com o ERP
 mysql -u root -p burntech_expedicao < alter_carregamentos_desembarque.sql # fluxo de Desembarque (perfil Em Campo)
 mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo numero_projeto na etiqueta da caixa
+mysql -u root -p burntech_expedicao < alter_carregamentos_sequencial_projeto.sql  # controle "numero_projeto-sequencial" no romaneio de carregamento
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

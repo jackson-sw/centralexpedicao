@@ -19,6 +19,12 @@ CREATE TABLE carregamentos (
   tipo                     ENUM('carregamento', 'descarregamento') NOT NULL DEFAULT 'carregamento',
   responsavel_nome         VARCHAR(150) NOT NULL,
   numero_projeto           VARCHAR(50)  NOT NULL,
+  -- Controle de carregamentos repetidos para o mesmo projeto (ex.: duas
+  -- cargas em dias diferentes para o mesmo número de projeto). Começa em
+  -- 1 e é calculado automaticamente no backend a cada novo carregamento
+  -- deste numero_projeto — exibido como "numero_projeto-sequencial_projeto"
+  -- (ex.: "240092-1", "240092-2") em telas, PDFs e e-mails de romaneio.
+  sequencial_projeto       SMALLINT UNSIGNED NOT NULL DEFAULT 1,
   placa                    VARCHAR(10)  NOT NULL,
   cidade_destino           VARCHAR(150) NOT NULL,
   observacoes              VARCHAR(500) NULL,
@@ -34,6 +40,7 @@ CREATE TABLE carregamentos (
   criado_em                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_carregamentos_projeto_sequencial (numero_projeto, sequencial_projeto),
   KEY idx_carregamentos_numero_projeto (numero_projeto),
   KEY idx_carregamentos_placa (placa),
   KEY idx_carregamentos_criado_em (criado_em),
@@ -165,6 +172,7 @@ SELECT
   c.tipo,
   c.responsavel_nome,
   c.numero_projeto,
+  c.sequencial_projeto,
   c.placa,
   c.cidade_destino,
   c.observacoes,

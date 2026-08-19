@@ -5,6 +5,13 @@ const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioCarregamentoPDF } = require('../pdf/romaneioCarregamento');
 const { gerarRomaneioFaltantesPDF } = require('../pdf/romaneioFaltantes');
 
+// Rótulo exibido em telas, PDFs e e-mails: "numero_projeto-sequencial_projeto"
+// (ex.: "240092-1", "240092-2") — distingue carregamentos repetidos para o
+// mesmo número de projeto (ex.: duas cargas em dias diferentes).
+function labelProjeto(carregamento) {
+  return `${carregamento.numero_projeto}-${carregamento.sequencial_projeto}`;
+}
+
 // GET /api/carregamentos — histórico (mais recentes primeiro)
 router.get('/', auth, async (req, res) => {
   try {
@@ -67,13 +74,35 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
 
     await conn.beginTransaction();
 
-    const [result] = await conn.query(
-      `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, placa, cidade_destino, observacoes, criado_por_perfil)
-       VALUES ('carregamento', ?, ?, ?, ?, ?, ?)`,
-      [responsavel_nome, numero_projeto, placa, cidade_destino, observacoes || null, req.usuario.perfil]
-    );
+    // Sequencial por projeto: 1 para o primeiro carregamento deste
+    // numero_projeto, 2 para o segundo, etc. — permite carregamentos
+    // repetidos do mesmo projeto (ex.: em dias diferentes) sem
+    // sobrescrever o controle. A UNIQUE KEY (numero_projeto,
+    // sequencial_projeto) é a garantia final contra corrida entre
+    // duas requisições simultâneas para o mesmo projeto; se isso
+    // acontecer, tentamos de novo com o próximo número disponível.
+    let carregamentoId;
+    let sequencialProjeto;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const [[{ total }]] = await conn.query(
+        'SELECT COUNT(*) AS total FROM carregamentos WHERE numero_projeto = ? FOR UPDATE',
+        [numero_projeto]
+      );
+      sequencialProjeto = total + 1;
+      try {
+        const [result] = await conn.query(
+          `INSERT INTO carregamentos (tipo, responsavel_nome, numero_projeto, sequencial_projeto, placa, cidade_destino, observacoes, criado_por_perfil)
+           VALUES ('carregamento', ?, ?, ?, ?, ?, ?, ?)`,
+          [responsavel_nome, numero_projeto, sequencialProjeto, placa, cidade_destino, observacoes || null, req.usuario.perfil]
+        );
+        carregamentoId = result.insertId;
+        break;
+      } catch (dupErr) {
+        if (dupErr.code === 'ER_DUP_ENTRY' && tentativa < 2) continue;
+        throw dupErr;
+      }
+    }
 
-    const carregamentoId = result.insertId;
     const caixaIdsUsadas = new Set();
 
     for (let i = 0; i < itens.length; i++) {
@@ -99,7 +128,12 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
     }
 
     await conn.commit();
-    res.status(201).json({ id: carregamentoId, mensagem: 'Carregamento registrado com sucesso.' });
+    res.status(201).json({
+      id: carregamentoId,
+      numero_projeto,
+      sequencial_projeto: sequencialProjeto,
+      mensagem: 'Carregamento registrado com sucesso.',
+    });
   } catch (err) {
     await conn.rollback();
     console.error('[POST /carregamentos]', err.message);
@@ -148,7 +182,7 @@ router.post('/:id/romaneio', auth, async (req, res) => {
     );
 
     const pdfBuffer = await gerarRomaneioCarregamentoPDF({ carregamento, itens });
-    const nomeArquivo = `romaneio-carregamento-${String(carregamento.numero_projeto).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const nomeArquivo = `romaneio-carregamento-${String(labelProjeto(carregamento)).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
 
     let emailEnviado = false;
     let emailErro = '';
@@ -157,9 +191,9 @@ router.post('/:id/romaneio', auth, async (req, res) => {
       try {
         await enviarEmail({
           to: destinatarios,
-          subject: `Romaneio — Carregamento #${carregamento.numero_projeto}`,
+          subject: `Romaneio — Carregamento #${labelProjeto(carregamento)}`,
           html: `
-            <p>Segue em anexo o romaneio do carregamento <strong>#${carregamento.numero_projeto}</strong>,
+            <p>Segue em anexo o romaneio do carregamento <strong>#${labelProjeto(carregamento)}</strong>,
             placa <strong>${carregamento.placa || '—'}</strong>, destino ${carregamento.cidade_destino},
             registrado em ${new Date(carregamento.criado_em).toLocaleString('pt-BR')}.</p>
             <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
@@ -290,7 +324,7 @@ router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) =
       totalItens: itens.length,
       responsavelDesembarque,
     });
-    const nomeArquivo = `romaneio-faltantes-${String(carregamento.numero_projeto).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const nomeArquivo = `romaneio-faltantes-${String(labelProjeto(carregamento)).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
 
     let emailEnviado = false;
     let emailErro = '';
@@ -300,13 +334,13 @@ router.post('/:id/desembarque/romaneio', auth, apenasEmCampo, async (req, res) =
         await enviarEmail({
           to: destinatarios,
           subject: itensFaltantes.length
-            ? `Itens faltantes — Carregamento #${carregamento.numero_projeto}`
-            : `Desembarque conferido — Carregamento #${carregamento.numero_projeto}`,
+            ? `Itens faltantes — Carregamento #${labelProjeto(carregamento)}`
+            : `Desembarque conferido — Carregamento #${labelProjeto(carregamento)}`,
           html: `
             <p>${itensFaltantes.length
               ? `Faltam <strong>${itensFaltantes.length}</strong> de ${itens.length} itens conferir no desembarque`
               : `Todos os ${itens.length} itens foram conferidos no desembarque`
-            } do carregamento <strong>#${carregamento.numero_projeto}</strong>,
+            } do carregamento <strong>#${labelProjeto(carregamento)}</strong>,
             placa <strong>${carregamento.placa || '—'}</strong>, destino ${carregamento.cidade_destino}.</p>
             <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
           `,

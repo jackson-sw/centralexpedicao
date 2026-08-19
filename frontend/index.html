@@ -763,7 +763,7 @@ function renderLista(lista) {
     <div class="ccard ${c.tipo}" onclick="verDetalhe(${c.id})">
       <div class="cc-top">
         <div>
-          <div class="cc-proj">#${c.numero_projeto}</div>
+          <div class="cc-proj">#${labelProjeto(c)}</div>
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
         <span class="cc-badge">${c.tipo === 'carregamento' ? 'Carregamento' : 'Descarregamento'}</span>
@@ -781,7 +781,7 @@ function renderLista(lista) {
 async function verDetalhe(id) {
   try {
     const c = await api('GET', '/carregamentos/' + id);
-    document.getElementById('det-titulo').textContent = '#' + c.numero_projeto + ' — ' + c.cidade_destino;
+    document.getElementById('det-titulo').textContent = '#' + labelProjeto(c) + ' — ' + c.cidade_destino;
     document.getElementById('det-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
     document.getElementById('det-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
@@ -855,7 +855,7 @@ function renderListaCampo(lista) {
     <div class="ccard ${c.tipo}" style="cursor:default">
       <div class="cc-top">
         <div>
-          <div class="cc-proj">#${c.numero_projeto}</div>
+          <div class="cc-proj">#${labelProjeto(c)}</div>
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
         <span class="cc-badge ${c.desembarque_status || 'pendente'}">${labelDesembarqueStatus(c.desembarque_status)}</span>
@@ -876,7 +876,7 @@ async function abrirDesembarque(id) {
     const c = await api('GET', '/carregamentos/' + id);
     desembarqueCarregamentoId = id;
     desembarqueItens = c.itens;
-    document.getElementById('desemb-titulo').textContent = '#' + c.numero_projeto + ' — ' + c.cidade_destino;
+    document.getElementById('desemb-titulo').textContent = '#' + labelProjeto(c) + ' — ' + c.cidade_destino;
     document.getElementById('desemb-sub').textContent = c.responsavel_nome + ' · placa ' + c.placa + ' · ' + fmtDT(c.criado_em);
     document.getElementById('desemb-responsavel').value = c.desembarque_responsavel || '';
     document.getElementById('desemb-codigo-manual').value = '';
@@ -1463,8 +1463,8 @@ async function salvarCarregamento() {
   const btn = document.getElementById('btn-salvar-carregamento');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens });
-    toast('Carregamento registrado com sucesso.');
+    const data = await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens });
+    toast(`Carregamento #${labelProjeto(data)} registrado com sucesso.`);
     fecharModal('mo-novo');
     carregarHistorico();
   } catch (e) {
@@ -1640,6 +1640,13 @@ function preencherCidadesDatalist(lista) {
 }
 
 // ── UTIL ──────────────────────────────────────────────
+// Rótulo de um carregamento: "numero_projeto-sequencial_projeto"
+// (ex.: "240092-1", "240092-2") — distingue carregamentos repetidos
+// para o mesmo número de projeto. Cai para só o número do projeto se
+// sequencial_projeto ainda não estiver disponível (registro antigo).
+function labelProjeto(c) {
+  return c.sequencial_projeto ? `${c.numero_projeto}-${c.sequencial_projeto}` : `${c.numero_projeto}`;
+}
 function fmtDT(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '—';

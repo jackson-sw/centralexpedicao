@@ -91,7 +91,7 @@ function desenharCabecalho(doc, pageWidth, carregamento) {
   doc.font('Helvetica-Bold').fontSize(13)
     .text('ROMANEIO DE CARREGAMENTO', 0, 34, { width: pageWidth - 40, align: 'right' });
   doc.font('Helvetica').fontSize(11)
-    .text('#' + carregamento.numero_projeto, 0, 56, { width: pageWidth - 40, align: 'right' });
+    .text('#' + carregamento.numero_projeto + '-' + carregamento.sequencial_projeto, 0, 56, { width: pageWidth - 40, align: 'right' });
 }
 
 function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {
