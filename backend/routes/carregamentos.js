@@ -177,6 +177,12 @@ router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
       'SELECT COALESCE(MAX(ordem), 0) AS maxOrdem FROM carregamento_itens WHERE carregamento_id = ?',
       [carregamento.id]
     );
+    // COALESCE(MAX(...), 0) volta do mysql2 como STRING, não number — sem
+    // este Number(), "maxOrdem + i + 1" vira concatenação de texto em vez
+    // de soma, inflando o valor a cada "Alterar" até estourar o limite da
+    // coluna (SMALLINT UNSIGNED, máx. 65535) — mesmo bug já visto em
+    // caixas.js (ver POST /caixas/:id/itens).
+    const proximoOrdem = Number(maxOrdem) || 0;
 
     const caixaIdsUsadas = new Set();
     const conn = await db.getConnection();
@@ -190,7 +196,7 @@ router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
         await conn.query(
           `INSERT INTO carregamento_itens (carregamento_id, caixa_id, caixa_item_id, codigo_item, descricao, quantidade, ordem)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [carregamento.id, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, maxOrdem + i + 1]
+          [carregamento.id, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, proximoOrdem + i + 1]
         );
       }
 
