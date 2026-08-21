@@ -95,6 +95,7 @@ router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
 
     const conn = await db.getConnection();
     let caixaId;
+    let itensIds;
     try {
       await conn.beginTransaction();
 
@@ -105,12 +106,14 @@ router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
       );
       caixaId = result.insertId;
 
+      itensIds = [];
       for (let i = 0; i < itens.length; i++) {
-        await conn.query(
+        const [itemResult] = await conn.query(
           `INSERT INTO caixa_itens (caixa_id, codigo_item, descricao, quantidade, responsavel_nome, ordem)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [caixaId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, responsavel_nome, i + 1]
         );
+        itensIds.push(itemResult.insertId);
       }
 
       await conn.commit();
@@ -121,7 +124,7 @@ router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
       conn.release();
     }
 
-    res.status(201).json({ id: caixaId, status: 'aberta', mensagem: 'Caixa salva. Use "Finalizar" quando estiver pronta.' });
+    res.status(201).json({ id: caixaId, status: 'aberta', itens_ids: itensIds, mensagem: 'Caixa salva. Use "Finalizar" quando estiver pronta.' });
   } catch (err) {
     console.error('[POST /caixas]', err.message);
     res.status(500).json({ erro: 'Erro ao salvar caixa.' });
@@ -166,14 +169,17 @@ router.post('/:id/itens', auth, apenasAlmoxarifado, async (req, res) => {
     const proximoOrdem = Number(maxOrdem) || 0;
 
     const conn = await db.getConnection();
+    let itensIds;
     try {
       await conn.beginTransaction();
+      itensIds = [];
       for (let i = 0; i < itens.length; i++) {
-        await conn.query(
+        const [itemResult] = await conn.query(
           `INSERT INTO caixa_itens (caixa_id, codigo_item, descricao, quantidade, responsavel_nome, ordem)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [caixa.id, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, responsavel_nome, proximoOrdem + i + 1]
         );
+        itensIds.push(itemResult.insertId);
       }
       await conn.commit();
     } catch (err) {
@@ -183,10 +189,41 @@ router.post('/:id/itens', auth, apenasAlmoxarifado, async (req, res) => {
       conn.release();
     }
 
-    res.json({ mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} por ${responsavel_nome}.` });
+    res.json({ itens_ids: itensIds, mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} por ${responsavel_nome}.` });
   } catch (err) {
     console.error('[POST /caixas/:id/itens]', err.message);
     res.status(500).json({ erro: 'Erro ao adicionar itens à caixa.' });
+  }
+});
+
+// PUT /api/caixas/:caixaId/itens/:itemId — edita um item já salvo
+// (botão "Confirmar" reenviando depois de uma correção manual no
+// código/descrição/quantidade). Só funciona enquanto a caixa estiver
+// aberta; não mexe no responsável do item (fica o de quando foi
+// criado).
+router.put('/:caixaId/itens/:itemId', auth, apenasAlmoxarifado, async (req, res) => {
+  try {
+    const { codigo_item, descricao, quantidade } = req.body;
+    if (!codigo_item || !descricao || !quantidade) {
+      return res.status(400).json({ erro: 'Código, descrição e quantidade são obrigatórios.' });
+    }
+
+    const [[caixa]] = await db.query('SELECT id, status FROM caixas WHERE id = ?', [req.params.caixaId]);
+    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    if (caixa.status !== 'aberta') {
+      return res.status(409).json({ erro: 'Esta caixa já foi finalizada e não aceita alterações.' });
+    }
+
+    const [result] = await db.query(
+      'UPDATE caixa_itens SET codigo_item = ?, descricao = ?, quantidade = ? WHERE id = ? AND caixa_id = ?',
+      [codigo_item, descricao, quantidade, req.params.itemId, caixa.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a esta caixa.' });
+
+    res.json({ id: Number(req.params.itemId), mensagem: 'Item atualizado.' });
+  } catch (err) {
+    console.error('[PUT /caixas/:caixaId/itens/:itemId]', err.message);
+    res.status(500).json({ erro: 'Erro ao atualizar item.' });
   }
 });
 

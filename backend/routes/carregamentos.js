@@ -108,17 +108,19 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
     }
 
     const caixaIdsUsadas = new Set();
+    const itensIds = [];
 
     for (let i = 0; i < itens.length; i++) {
       const caixaId = itens[i].caixa_id || null;
       const caixaItemId = itens[i].caixa_item_id || null;
       if (caixaId) caixaIdsUsadas.add(caixaId);
 
-      await conn.query(
+      const [itemResult] = await conn.query(
         `INSERT INTO carregamento_itens (carregamento_id, caixa_id, caixa_item_id, codigo_item, descricao, quantidade, ordem)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [carregamentoId, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, i + 1]
       );
+      itensIds.push(itemResult.insertId);
     }
 
     // Marca como "expedida" qualquer caixa cujos itens tenham sido usados
@@ -137,6 +139,7 @@ router.post('/', auth, apenasExpedicao, async (req, res) => {
       numero_projeto,
       sequencial_projeto: sequencialProjeto,
       status: finalizar ? 'concluido' : 'em_andamento',
+      itens_ids: itensIds,
       mensagem: finalizar
         ? 'Carregamento registrado e finalizado com sucesso.'
         : 'Carregamento salvo. Use "Finalizar" quando não for mais adicionar itens.',
@@ -185,6 +188,7 @@ router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
     const proximoOrdem = Number(maxOrdem) || 0;
 
     const caixaIdsUsadas = new Set();
+    const itensIds = [];
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
@@ -193,11 +197,12 @@ router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
         const caixaItemId = itens[i].caixa_item_id || null;
         if (caixaId) caixaIdsUsadas.add(caixaId);
 
-        await conn.query(
+        const [itemResult] = await conn.query(
           `INSERT INTO carregamento_itens (carregamento_id, caixa_id, caixa_item_id, codigo_item, descricao, quantidade, ordem)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [carregamento.id, caixaId, caixaItemId, itens[i].codigo_item, itens[i].descricao, itens[i].quantidade, proximoOrdem + i + 1]
         );
+        itensIds.push(itemResult.insertId);
       }
 
       if (caixaIdsUsadas.size) {
@@ -216,10 +221,39 @@ router.post('/:id/itens', auth, apenasExpedicao, async (req, res) => {
       conn.release();
     }
 
-    res.json({ mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} ao carregamento.` });
+    res.json({ itens_ids: itensIds, mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} ao carregamento.` });
   } catch (err) {
     console.error('[POST /carregamentos/:id/itens]', err.message);
     res.status(500).json({ erro: 'Erro ao adicionar itens ao carregamento.' });
+  }
+});
+
+// PUT /api/carregamentos/:carregamentoId/itens/:itemId — edita um item
+// já salvo (botão "Confirmar" reenviando depois de uma correção). Só
+// funciona enquanto o carregamento estiver em andamento.
+router.put('/:carregamentoId/itens/:itemId', auth, apenasExpedicao, async (req, res) => {
+  try {
+    const { codigo_item, descricao, quantidade } = req.body;
+    if (!codigo_item || !descricao || !quantidade) {
+      return res.status(400).json({ erro: 'Código, descrição e quantidade são obrigatórios.' });
+    }
+
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.carregamentoId]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status !== 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento já foi finalizado e não aceita alterações.' });
+    }
+
+    const [result] = await db.query(
+      'UPDATE carregamento_itens SET codigo_item = ?, descricao = ?, quantidade = ? WHERE id = ? AND carregamento_id = ?',
+      [codigo_item, descricao, quantidade, req.params.itemId, carregamento.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a este carregamento.' });
+
+    res.json({ id: Number(req.params.itemId), mensagem: 'Item atualizado.' });
+  } catch (err) {
+    console.error('[PUT /carregamentos/:carregamentoId/itens/:itemId]', err.message);
+    res.status(500).json({ erro: 'Erro ao atualizar item.' });
   }
 });
 

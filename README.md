@@ -43,6 +43,10 @@ Um carregamento passa por dois estados: **em andamento → concluído** (mesmo m
 
 Enquanto um carregamento está **em andamento**, ele não aparece na lista do perfil Em Campo (nada saiu do pátio ainda) e o Romaneio fica bloqueado — mesma regra de bloqueio que já vale para caixas ainda abertas.
 
+### Confirmação item a item
+
+Em "Novo Carregamento", "Nova Caixa" e nas telas de "Alterar", cada item tem seu próprio botão **"✓ Confirmar"** — ao tocar nele, aquele item é salvo no servidor na hora, em vez de esperar o botão final da tela. O primeiro item confirmado já cria a caixa/carregamento (trancando os campos do cabeçalho, como responsável/projeto/placa/destino, contra edição depois); os itens seguintes só se somam a ela. Editar um item já confirmado marca a linha como pendente de novo — é só confirmar de novo pra reenviar a correção. Isso existe pra não perder itens já lidos se o app fechar sem querer no meio da leitura: só a última linha ainda não confirmada fica em risco, não a lista inteira. Os botões "Salvar"/"Finalizar"/"Fechar" no rodapé confirmam automaticamente qualquer linha pendente antes de encerrar, então nada digitado se perde ao fechar normalmente.
+
 ## Fluxo de caixas
 
 Uma caixa passa por três estados: **aberta → fechada → expedida**.

@@ -405,9 +405,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">📦 Novo Carregamento</div>
-        <div class="ms">O carregamento fica "em andamento" e pode receber mais itens depois — use "Finalizar" quando o caminhão estiver pronto para sair.</div>
+        <div class="ms" id="nc-subtitulo">Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.</div>
       </div>
-      <button class="mx" onclick="fecharModal('mo-novo')">×</button>
+      <button class="mx" onclick="fecharNovoCarregamento()">×</button>
     </div>
     <div class="mb">
       <div class="fg"><label>Nome do responsável *</label><input id="nc-responsavel" placeholder="Ex: João da Silva"></div>
@@ -424,7 +424,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div id="mat-list"></div>
     </div>
     <div class="mf">
-      <button class="btn btn-out" onclick="fecharModal('mo-novo')">Cancelar</button>
+      <button class="btn btn-out" id="btn-cancelar-novo-carregamento" onclick="fecharNovoCarregamento()">Cancelar</button>
       <button class="btn btn-out" id="btn-salvar-carregamento" onclick="salvarCarregamento(false)">Salvar Carregamento</button>
       <button class="btn btn-red" id="btn-finalizar-novo-carregamento" onclick="salvarCarregamento(true)">✅ Finalizar</button>
     </div>
@@ -437,9 +437,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">✏️ Alterar Carregamento</div>
-        <div class="ms" id="alt-carreg-sub">Adicione novos itens ao carregamento</div>
+        <div class="ms" id="alt-carreg-sub">Confirme cada item novo pra salvar na hora, sem depender do botão final.</div>
       </div>
-      <button class="mx" onclick="fecharModal('mo-carregamento-alterar')">×</button>
+      <button class="mx" onclick="fecharAlterarCarregamento()">×</button>
     </div>
     <div class="mb">
       <div id="alt-carreg-itens-existentes"></div>
@@ -451,8 +451,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div id="mat-list-carreg-alterar"></div>
     </div>
     <div class="mf">
-      <button class="btn btn-out" onclick="fecharModal('mo-carregamento-alterar')">Cancelar</button>
-      <button class="btn btn-blue" id="btn-salvar-carreg-alterar" onclick="salvarAlteracaoCarregamento()">Salvar Alteração</button>
+      <button class="btn btn-out" onclick="fecharAlterarCarregamento()">Cancelar</button>
+      <button class="btn btn-blue" id="btn-salvar-carreg-alterar" onclick="salvarAlteracaoCarregamento()">Fechar</button>
     </div>
   </div>
 </div>
@@ -519,9 +519,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">🧰 Nova Caixa</div>
-        <div class="ms">Almoxarifado → pátio da expedição. A caixa fica "aberta" e pode receber mais itens depois — use "Finalizar" quando estiver pronta.</div>
+        <div class="ms" id="cx-subtitulo">Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.</div>
       </div>
-      <button class="mx" onclick="fecharModal('mo-caixa')">×</button>
+      <button class="mx" onclick="fecharNovaCaixa()">×</button>
     </div>
     <div class="mb">
       <div class="fg">
@@ -543,7 +543,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div id="mat-list-caixa"></div>
     </div>
     <div class="mf">
-      <button class="btn btn-out" onclick="fecharModal('mo-caixa')">Cancelar</button>
+      <button class="btn btn-out" id="btn-cancelar-caixa" onclick="fecharNovaCaixa()">Cancelar</button>
       <button class="btn btn-blue" id="btn-salvar-caixa" onclick="salvarCaixa()">Salvar</button>
     </div>
   </div>
@@ -597,9 +597,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mh">
       <div>
         <div class="mt">✏️ Alterar Caixa</div>
-        <div class="ms" id="alt-sub">Adicione novos itens à caixa</div>
+        <div class="ms" id="alt-sub">Confirme cada item novo pra salvar na hora, sem depender do botão final.</div>
       </div>
-      <button class="mx" onclick="fecharModal('mo-caixa-alterar')">×</button>
+      <button class="mx" onclick="fecharAlterarCaixa()">×</button>
     </div>
     <div class="mb">
       <div class="fg">
@@ -621,8 +621,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div id="mat-list-alterar"></div>
     </div>
     <div class="mf">
-      <button class="btn btn-out" onclick="fecharModal('mo-caixa-alterar')">Cancelar</button>
-      <button class="btn btn-blue" id="btn-salvar-alterar" onclick="salvarAlteracaoCaixa()">Salvar Alteração</button>
+      <button class="btn btn-out" id="btn-cancelar-alterar" onclick="fecharAlterarCaixa()">Cancelar</button>
+      <button class="btn btn-blue" id="btn-salvar-alterar" onclick="salvarAlteracaoCaixa()">Fechar</button>
     </div>
   </div>
 </div>
@@ -1194,10 +1194,20 @@ function renderFooterCaixaDetalhe(c) {
 }
 
 // ── NOVA CAIXA ─────────────────────────────────────────
+// id da caixa já criada no servidor nesta sessão do modal "Nova Caixa"
+// — null até o primeiro item ser confirmado (ver confirmarItemCaixa).
+let caixaEmCriacaoId = null;
+
 function abrirNovaCaixa() {
   document.getElementById('cx-responsavel').value = '';
+  document.getElementById('cx-responsavel').disabled = false;
   document.getElementById('cx-projeto').value = '';
+  document.getElementById('cx-projeto').disabled = false;
   document.getElementById('cx-obs').value = '';
+  document.getElementById('cx-obs').disabled = false;
+  document.getElementById('cx-subtitulo').textContent = 'Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
+  document.getElementById('btn-cancelar-caixa').textContent = 'Cancelar';
+  caixaEmCriacaoId = null;
   caixaItensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
   renderItensCaixa();
   abrirModal('mo-caixa');
@@ -1209,7 +1219,7 @@ function renderItensCaixa() {
     <div class="mat-row">
       <div class="mat-row-top">
         <span class="mat-row-num">Item ${idx + 1}</span>
-        ${caixaItensAtuais.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemCaixa(${idx})" title="Remover item">×</button>` : ''}
+        ${(!it.id && caixaItensAtuais.length > 1) ? `<button type="button" class="mat-remove" onclick="removeItemCaixa(${idx})" title="Remover item">×</button>` : ''}
       </div>
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
@@ -1228,12 +1238,24 @@ function renderItensCaixa() {
           <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCaixa(${idx},'quantidade',this.value)">
         </div>
       </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn ${it.salvo ? 'btn-out' : 'btn-blue'}" id="btn-confirmar-caixa-${idx}" onclick="confirmarItemCaixa(${idx})">${it.salvo ? '✅ Salvo' : '✓ Confirmar'}</button>
+      </div>
     </div>
   `).join('');
 }
 
 function atualizaItemCaixa(idx, campo, valor) {
-  caixaItensAtuais[idx][campo] = valor;
+  const it = caixaItensAtuais[idx];
+  it[campo] = valor;
+  // Se o item já tinha sido confirmado e agora foi editado, o botão
+  // volta a ficar "pendente" pra avisar que precisa confirmar de novo
+  // (sem recriar a linha inteira, pra não perder o foco do campo).
+  if (it.id && it.salvo) {
+    it.salvo = false;
+    const btn = document.getElementById(`btn-confirmar-caixa-${idx}`);
+    if (btn) { btn.textContent = '✓ Confirmar'; btn.classList.remove('btn-out'); btn.classList.add('btn-blue'); }
+  }
 }
 
 function addItemCaixa() {
@@ -1246,31 +1268,108 @@ function removeItemCaixa(idx) {
   renderItensCaixa();
 }
 
-async function salvarCaixa() {
+function travarCabecalhoCaixa() {
+  document.getElementById('cx-responsavel').disabled = true;
+  document.getElementById('cx-projeto').disabled = true;
+  document.getElementById('cx-obs').disabled = true;
+  document.getElementById('cx-subtitulo').textContent = 'Caixa aberta — os itens confirmados já estão salvos. Adicione mais ou feche quando terminar.';
+  document.getElementById('btn-cancelar-caixa').textContent = 'Fechar';
+}
+
+// Confirma (salva no servidor) o item da linha idx: cria a caixa junto
+// com ele se for o primeiro item confirmado nesta sessão do modal,
+// adiciona à caixa já criada se não for o primeiro, ou atualiza o
+// item se ele já tinha sido confirmado antes e foi editado depois.
+// Retorna true/false conforme o resultado, pra "Salvar" poder reusar.
+async function confirmarItemCaixa(idx) {
+  const it = caixaItensAtuais[idx];
+  const codigo_item = (it.codigo_item || '').trim();
+  const descricao = (it.descricao || '').trim();
+  const quantidade = parseFloat(it.quantidade) || 0;
+  if (!codigo_item || !descricao || !quantidade) {
+    toast('Preencha código, descrição e quantidade antes de confirmar.', true);
+    return false;
+  }
   const responsavel_nome = document.getElementById('cx-responsavel').value;
-  const numero_projeto = document.getElementById('cx-projeto').value.trim();
-  const observacoes = document.getElementById('cx-obs').value.trim();
+  if (!responsavel_nome) {
+    toast('Selecione o responsável antes de confirmar o item.', true);
+    return false;
+  }
+  it.codigo_item = codigo_item; it.descricao = descricao; it.quantidade = quantidade;
 
-  if (!responsavel_nome) { toast('Selecione o responsável.', true); return; }
+  const btn = document.getElementById(`btn-confirmar-caixa-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    if (!it.id) {
+      if (!caixaEmCriacaoId) {
+        const numero_projeto = document.getElementById('cx-projeto').value.trim();
+        const observacoes = document.getElementById('cx-obs').value.trim();
+        const data = await api('POST', '/caixas', {
+          responsavel_nome, numero_projeto: numero_projeto || null, observacoes: observacoes || null,
+          itens: [{ codigo_item, descricao, quantidade }],
+        });
+        caixaEmCriacaoId = data.id;
+        it.id = data.itens_ids[0];
+        travarCabecalhoCaixa();
+      } else {
+        const data = await api('POST', `/caixas/${caixaEmCriacaoId}/itens`, {
+          responsavel_nome, itens: [{ codigo_item, descricao, quantidade }],
+        });
+        it.id = data.itens_ids[0];
+      }
+    } else {
+      await api('PUT', `/caixas/${caixaEmCriacaoId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+    }
+    it.salvo = true;
+    if (idx === caixaItensAtuais.length - 1) {
+      caixaItensAtuais.push({ codigo_item: '', descricao: '', quantidade: 1 });
+    }
+    renderItensCaixa();
+    toast('Item salvo.');
+    return true;
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
+    return false;
+  }
+}
 
-  const itens = caixaItensAtuais
-    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0 }))
-    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
-
-  if (!itens.length) { toast('Inclua ao menos um item válido na caixa.', true); return; }
-
+// "Salvar" só fecha a janela — os itens já foram salvos um a um ao
+// confirmar cada linha. Se sobrar uma última linha preenchida mas
+// ainda não confirmada, confirma ela antes de fechar (pra não perder
+// o que já foi digitado/escaneado).
+async function salvarCaixa() {
   const btn = document.getElementById('btn-salvar-caixa');
+  const ultimoIdx = caixaItensAtuais.length - 1;
+  const ultimo = caixaItensAtuais[ultimoIdx];
+  const ultimoPreenchido = !!(ultimo && (ultimo.codigo_item || '').trim() && (ultimo.descricao || '').trim() && parseFloat(ultimo.quantidade) > 0);
+  const precisaConfirmar = ultimoPreenchido && !ultimo.salvo;
+
+  if (!caixaEmCriacaoId && !precisaConfirmar) {
+    toast('Confirme ao menos um item antes de salvar.', true);
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    await api('POST', '/caixas', { responsavel_nome, numero_projeto: numero_projeto || null, observacoes: observacoes || null, itens });
+    if (precisaConfirmar) {
+      const ok = await confirmarItemCaixa(ultimoIdx);
+      if (!ok) return;
+    }
     toast('Caixa salva. Use "Finalizar" quando estiver pronta.');
     fecharModal('mo-caixa');
     carregarCaixas('lista-caixas-almox');
-  } catch (e) {
-    toast(e.message, true);
   } finally {
     btn.disabled = false; btn.textContent = 'Salvar';
   }
+}
+
+// Fecha o modal "Nova Caixa" (× ou Cancelar/Fechar). Se algum item já
+// tiver sido confirmado (caixa já existe no servidor), não há nada
+// pra descartar — só atualiza a lista em segundo plano.
+function fecharNovaCaixa() {
+  fecharModal('mo-caixa');
+  if (caixaEmCriacaoId) carregarCaixas('lista-caixas-almox');
 }
 
 // ── ALTERAR CAIXA (adicionar novos itens a uma caixa aberta) ──
@@ -1282,8 +1381,10 @@ async function abrirAlterarCaixa(id) {
     const c = await api('GET', '/caixas/' + id);
     alterandoCaixaId = id;
     document.getElementById('alt-sub').textContent =
-      (c.codigo_barras || ('Caixa #' + c.id)) + ' — os itens já cadastrados estão listados abaixo; adicione os novos.';
+      (c.codigo_barras || ('Caixa #' + c.id)) + ' — confirme cada item novo pra salvar na hora.';
     document.getElementById('alt-responsavel').value = '';
+    document.getElementById('alt-responsavel').disabled = false;
+    document.getElementById('btn-cancelar-alterar').textContent = 'Cancelar';
     document.getElementById('alt-itens-existentes').innerHTML = `
       <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
       ${c.itens.map(i => `
@@ -1312,7 +1413,7 @@ function renderItensAlterar() {
     <div class="mat-row">
       <div class="mat-row-top">
         <span class="mat-row-num">Novo item ${idx + 1}</span>
-        ${novosItensAlterar.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemAlterar(${idx})" title="Remover item">×</button>` : ''}
+        ${(!it.id && novosItensAlterar.length > 1) ? `<button type="button" class="mat-remove" onclick="removeItemAlterar(${idx})" title="Remover item">×</button>` : ''}
       </div>
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
@@ -1331,12 +1432,21 @@ function renderItensAlterar() {
           <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemAlterar(${idx},'quantidade',this.value)">
         </div>
       </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn ${it.salvo ? 'btn-out' : 'btn-blue'}" id="btn-confirmar-alterar-${idx}" onclick="confirmarItemAlterar(${idx})">${it.salvo ? '✅ Salvo' : '✓ Confirmar'}</button>
+      </div>
     </div>
   `).join('');
 }
 
 function atualizaItemAlterar(idx, campo, valor) {
-  novosItensAlterar[idx][campo] = valor;
+  const it = novosItensAlterar[idx];
+  it[campo] = valor;
+  if (it.id && it.salvo) {
+    it.salvo = false;
+    const btn = document.getElementById(`btn-confirmar-alterar-${idx}`);
+    if (btn) { btn.textContent = '✓ Confirmar'; btn.classList.remove('btn-out'); btn.classList.add('btn-blue'); }
+  }
 }
 
 function addItemAlterar() {
@@ -1349,28 +1459,78 @@ function removeItemAlterar(idx) {
   renderItensAlterar();
 }
 
-async function salvarAlteracaoCaixa() {
+// Confirma (salva no servidor) o item da linha idx: adiciona à caixa
+// (POST) se ainda não tinha sido salvo, ou atualiza (PUT) se já
+// existia e foi editado depois.
+async function confirmarItemAlterar(idx) {
+  const it = novosItensAlterar[idx];
+  const codigo_item = (it.codigo_item || '').trim();
+  const descricao = (it.descricao || '').trim();
+  const quantidade = parseFloat(it.quantidade) || 0;
+  if (!codigo_item || !descricao || !quantidade) {
+    toast('Preencha código, descrição e quantidade antes de confirmar.', true);
+    return false;
+  }
   const responsavel_nome = document.getElementById('alt-responsavel').value;
-  if (!responsavel_nome) { toast('Selecione o novo responsável.', true); return; }
+  if (!responsavel_nome) {
+    toast('Selecione o novo responsável antes de confirmar o item.', true);
+    return false;
+  }
+  it.codigo_item = codigo_item; it.descricao = descricao; it.quantidade = quantidade;
 
-  const itens = novosItensAlterar
-    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0 }))
-    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
-
-  if (!itens.length) { toast('Inclua ao menos um novo item.', true); return; }
-
-  const btn = document.getElementById('btn-salvar-alterar');
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  const btn = document.getElementById(`btn-confirmar-alterar-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
-    const data = await api('POST', `/caixas/${alterandoCaixaId}/itens`, { responsavel_nome, itens });
-    toast(data.mensagem || 'Itens adicionados.');
-    fecharModal('mo-caixa-alterar');
-    carregarCaixas('lista-caixas-almox');
+    if (!it.id) {
+      const data = await api('POST', `/caixas/${alterandoCaixaId}/itens`, {
+        responsavel_nome, itens: [{ codigo_item, descricao, quantidade }],
+      });
+      it.id = data.itens_ids[0];
+      document.getElementById('alt-responsavel').disabled = true;
+      document.getElementById('btn-cancelar-alterar').textContent = 'Fechar';
+    } else {
+      await api('PUT', `/caixas/${alterandoCaixaId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+    }
+    it.salvo = true;
+    if (idx === novosItensAlterar.length - 1) {
+      novosItensAlterar.push({ codigo_item: '', descricao: '', quantidade: 1 });
+    }
+    renderItensAlterar();
+    toast('Item salvo.');
+    return true;
   } catch (e) {
     toast(e.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Salvar Alteração';
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
+    return false;
   }
+}
+
+// "Fechar" só encerra a janela — os itens já foram salvos um a um.
+// Se sobrar uma última linha preenchida mas não confirmada, confirma
+// antes de fechar.
+async function salvarAlteracaoCaixa() {
+  const btn = document.getElementById('btn-salvar-alterar');
+  const ultimoIdx = novosItensAlterar.length - 1;
+  const ultimo = novosItensAlterar[ultimoIdx];
+  const ultimoPreenchido = !!(ultimo && (ultimo.codigo_item || '').trim() && (ultimo.descricao || '').trim() && parseFloat(ultimo.quantidade) > 0);
+  const precisaConfirmar = ultimoPreenchido && !ultimo.salvo;
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    if (precisaConfirmar) {
+      const ok = await confirmarItemAlterar(ultimoIdx);
+      if (!ok) return;
+    }
+    fecharModal('mo-caixa-alterar');
+    carregarCaixas('lista-caixas-almox');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Fechar';
+  }
+}
+
+function fecharAlterarCaixa() {
+  fecharModal('mo-caixa-alterar');
+  carregarCaixas('lista-caixas-almox');
 }
 
 // ── FINALIZAR CAIXA ────────────────────────────────────
@@ -1495,11 +1655,22 @@ async function enfileirarEtiqueta(caixaId, btnId) {
 }
 
 // ── NOVO CARREGAMENTO ─────────────────────────────────
+// id do carregamento já criado no servidor nesta sessão do modal
+// "Novo Carregamento" — null até o primeiro item ser confirmado.
+let carregamentoEmCriacaoId = null;
+
 function abrirNovoCarregamento() {
   document.getElementById('nc-responsavel').value = '';
+  document.getElementById('nc-responsavel').disabled = false;
   document.getElementById('nc-projeto').value = '';
+  document.getElementById('nc-projeto').disabled = false;
   document.getElementById('nc-placa').value = '';
+  document.getElementById('nc-placa').disabled = false;
   document.getElementById('nc-cidade').value = '';
+  document.getElementById('nc-cidade').disabled = false;
+  document.getElementById('nc-subtitulo').textContent = 'Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
+  document.getElementById('btn-cancelar-novo-carregamento').textContent = 'Cancelar';
+  carregamentoEmCriacaoId = null;
   itensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
   renderItens();
   abrirModal('mo-novo');
@@ -1512,7 +1683,7 @@ function renderItens() {
     <div class="mat-row">
       <div class="mat-row-top">
         <span class="mat-row-num">Item ${idx + 1}</span>
-        ${itensAtuais.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemRow(${idx})" title="Remover item">×</button>` : ''}
+        ${(!it.id && itensAtuais.length > 1) ? `<button type="button" class="mat-remove" onclick="removeItemRow(${idx})" title="Remover item">×</button>` : ''}
       </div>
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
@@ -1532,15 +1703,24 @@ function renderItens() {
         </div>
       </div>
       ${it.caixa_id ? `<div class="cc-from-box">🧰 Veio da caixa ${escapeHtml(it.caixa_codigo || '')}</div>` : ''}
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn ${it.salvo ? 'btn-out' : 'btn-blue'}" id="btn-confirmar-item-${idx}" onclick="confirmarItem(${idx})">${it.salvo ? '✅ Salvo' : '✓ Confirmar'}</button>
+      </div>
     </div>
   `).join('');
 }
 
 function atualizaItem(idx, campo, valor) {
-  itensAtuais[idx][campo] = valor;
+  const it = itensAtuais[idx];
+  it[campo] = valor;
   // Se o código foi editado manualmente, o item deixa de ser tratado
   // como proveniente automaticamente de uma caixa.
-  if (campo === 'codigo_item') { itensAtuais[idx].caixa_id = null; itensAtuais[idx].caixa_item_id = null; }
+  if (campo === 'codigo_item') { it.caixa_id = null; it.caixa_item_id = null; }
+  if (it.id && it.salvo) {
+    it.salvo = false;
+    const btn = document.getElementById(`btn-confirmar-item-${idx}`);
+    if (btn) { btn.textContent = '✓ Confirmar'; btn.classList.remove('btn-out'); btn.classList.add('btn-blue'); }
+  }
 }
 
 function addItemRow() {
@@ -1553,37 +1733,109 @@ function removeItemRow(idx) {
   renderItens();
 }
 
-// finalizar=false → "Salvar Carregamento": grava e fecha a janela, mas
-// deixa o carregamento "em andamento" (pode receber mais itens depois
-// via "Alterar", no detalhe). finalizar=true → "Finalizar": grava já
-// encerrado, pronto para romaneio/desembarque, igual ao comportamento
-// original (não aceita mais itens depois).
-async function salvarCarregamento(finalizar) {
+function travarCabecalhoCarregamento() {
+  document.getElementById('nc-responsavel').disabled = true;
+  document.getElementById('nc-projeto').disabled = true;
+  document.getElementById('nc-placa').disabled = true;
+  document.getElementById('nc-cidade').disabled = true;
+  document.getElementById('nc-subtitulo').textContent = 'Carregamento em andamento — os itens confirmados já estão salvos. Adicione mais ou finalize quando o caminhão estiver pronto.';
+  document.getElementById('btn-cancelar-novo-carregamento').textContent = 'Fechar';
+}
+
+// Confirma (salva no servidor) o item da linha idx: cria o
+// carregamento junto com ele se for o primeiro item confirmado nesta
+// sessão do modal, adiciona ao carregamento já criado se não for o
+// primeiro, ou atualiza o item se ele já tinha sido confirmado antes
+// e foi editado depois. Retorna true/false conforme o resultado.
+async function confirmarItem(idx) {
+  const it = itensAtuais[idx];
+  const codigo_item = (it.codigo_item || '').trim();
+  const descricao = (it.descricao || '').trim();
+  const quantidade = parseFloat(it.quantidade) || 0;
+  if (!codigo_item || !descricao || !quantidade) {
+    toast('Preencha código, descrição e quantidade antes de confirmar.', true);
+    return false;
+  }
   const responsavel_nome = document.getElementById('nc-responsavel').value.trim();
   const numero_projeto   = document.getElementById('nc-projeto').value.trim();
   const placa             = document.getElementById('nc-placa').value.trim().toUpperCase();
   const cidade_destino   = document.getElementById('nc-cidade').value.trim();
-
   if (!responsavel_nome || !numero_projeto || !placa || !cidade_destino) {
-    toast('Preencha responsável, projeto, placa e cidade de destino.', true); return;
+    toast('Preencha responsável, projeto, placa e cidade de destino antes de confirmar o item.', true);
+    return false;
   }
-  const itens = itensAtuais
-    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null, caixa_item_id: i.caixa_item_id || null }))
-    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
+  it.codigo_item = codigo_item; it.descricao = descricao; it.quantidade = quantidade;
 
-  if (!itens.length) { toast('Inclua ao menos um item válido na lista de materiais.', true); return; }
+  const btn = document.getElementById(`btn-confirmar-item-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    const payloadItem = { codigo_item, descricao, quantidade, caixa_id: it.caixa_id || null, caixa_item_id: it.caixa_item_id || null };
+    if (!it.id) {
+      if (!carregamentoEmCriacaoId) {
+        const data = await api('POST', '/carregamentos', {
+          responsavel_nome, numero_projeto, placa, cidade_destino, itens: [payloadItem], finalizar: false,
+        });
+        carregamentoEmCriacaoId = data.id;
+        it.id = data.itens_ids[0];
+        travarCabecalhoCarregamento();
+      } else {
+        const data = await api('POST', `/carregamentos/${carregamentoEmCriacaoId}/itens`, { itens: [payloadItem] });
+        it.id = data.itens_ids[0];
+      }
+    } else {
+      await api('PUT', `/carregamentos/${carregamentoEmCriacaoId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+    }
+    it.salvo = true;
+    if (idx === itensAtuais.length - 1) {
+      itensAtuais.push({ codigo_item: '', descricao: '', quantidade: 1 });
+    }
+    renderItens();
+    toast('Item salvo.');
+    return true;
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
+    return false;
+  }
+}
 
+// finalizar=false → "Salvar Carregamento": só fecha a janela (os itens
+// já foram salvos um a um ao confirmar cada linha), deixando o
+// carregamento "em andamento" — pode receber mais itens depois via
+// "Alterar", no detalhe. finalizar=true → "Finalizar": chama
+// POST /:id/finalizar depois de garantir que tudo foi confirmado —
+// não aceita mais itens depois. Em ambos os casos, se sobrar uma
+// última linha preenchida mas ainda não confirmada, confirma ela
+// antes de prosseguir (pra não perder o que já foi digitado/escaneado).
+async function salvarCarregamento(finalizar) {
   const btnSalvar = document.getElementById('btn-salvar-carregamento');
   const btnFinalizar = document.getElementById('btn-finalizar-novo-carregamento');
   const btnClicado = finalizar ? btnFinalizar : btnSalvar;
   const textoOriginal = btnClicado.textContent;
+
+  const ultimoIdx = itensAtuais.length - 1;
+  const ultimo = itensAtuais[ultimoIdx];
+  const ultimoPreenchido = !!(ultimo && (ultimo.codigo_item || '').trim() && (ultimo.descricao || '').trim() && parseFloat(ultimo.quantidade) > 0);
+  const precisaConfirmar = ultimoPreenchido && !ultimo.salvo;
+
+  if (!carregamentoEmCriacaoId && !precisaConfirmar) {
+    toast(`Confirme ao menos um item antes de ${finalizar ? 'finalizar' : 'salvar'}.`, true);
+    return;
+  }
+
   btnSalvar.disabled = true; btnFinalizar.disabled = true;
-  btnClicado.textContent = 'Salvando...';
+  btnClicado.textContent = finalizar ? 'Finalizando...' : 'Salvando...';
   try {
-    const data = await api('POST', '/carregamentos', { responsavel_nome, numero_projeto, placa, cidade_destino, itens, finalizar });
-    toast(finalizar
-      ? `Carregamento #${labelProjeto(data)} registrado e finalizado com sucesso.`
-      : `Carregamento #${labelProjeto(data)} salvo. Use "Alterar" no detalhe para adicionar mais itens depois.`);
+    if (precisaConfirmar) {
+      const ok = await confirmarItem(ultimoIdx);
+      if (!ok) return;
+    }
+    if (finalizar) {
+      await api('POST', `/carregamentos/${carregamentoEmCriacaoId}/finalizar`, {});
+      toast('Carregamento finalizado com sucesso.');
+    } else {
+      toast('Carregamento salvo. Use "Alterar" no detalhe para adicionar mais itens depois.');
+    }
     fecharModal('mo-novo');
     carregarHistorico();
   } catch (e) {
@@ -1594,13 +1846,18 @@ async function salvarCarregamento(finalizar) {
   }
 }
 
+function fecharNovoCarregamento() {
+  fecharModal('mo-novo');
+  if (carregamentoEmCriacaoId) carregarHistorico();
+}
+
 // ── ALTERAR CARREGAMENTO (adicionar itens a um carregamento em andamento) ──
 async function abrirAlterarCarregamento(id) {
   try {
     const c = await api('GET', '/carregamentos/' + id);
     alterandoCarregamentoId = id;
     document.getElementById('alt-carreg-sub').textContent =
-      '#' + labelProjeto(c) + ' — os itens já cadastrados estão listados abaixo; adicione os novos.';
+      '#' + labelProjeto(c) + ' — confirme cada item novo pra salvar na hora.';
     document.getElementById('alt-carreg-itens-existentes').innerHTML = `
       <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
       ${c.itens.map(i => `
@@ -1630,7 +1887,7 @@ function renderItensCarregAlterar() {
     <div class="mat-row">
       <div class="mat-row-top">
         <span class="mat-row-num">Novo item ${idx + 1}</span>
-        ${novosItensCarregAlterar.length > 1 ? `<button type="button" class="mat-remove" onclick="removeItemCarregAlterar(${idx})" title="Remover item">×</button>` : ''}
+        ${(!it.id && novosItensCarregAlterar.length > 1) ? `<button type="button" class="mat-remove" onclick="removeItemCarregAlterar(${idx})" title="Remover item">×</button>` : ''}
       </div>
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
@@ -1650,13 +1907,22 @@ function renderItensCarregAlterar() {
         </div>
       </div>
       ${it.caixa_id ? `<div class="cc-from-box">🧰 Veio da caixa ${escapeHtml(it.caixa_codigo || '')}</div>` : ''}
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn ${it.salvo ? 'btn-out' : 'btn-blue'}" id="btn-confirmar-carreg-alterar-${idx}" onclick="confirmarItemCarregAlterar(${idx})">${it.salvo ? '✅ Salvo' : '✓ Confirmar'}</button>
+      </div>
     </div>
   `).join('');
 }
 
 function atualizaItemCarregAlterar(idx, campo, valor) {
-  novosItensCarregAlterar[idx][campo] = valor;
-  if (campo === 'codigo_item') { novosItensCarregAlterar[idx].caixa_id = null; novosItensCarregAlterar[idx].caixa_item_id = null; }
+  const it = novosItensCarregAlterar[idx];
+  it[campo] = valor;
+  if (campo === 'codigo_item') { it.caixa_id = null; it.caixa_item_id = null; }
+  if (it.id && it.salvo) {
+    it.salvo = false;
+    const btn = document.getElementById(`btn-confirmar-carreg-alterar-${idx}`);
+    if (btn) { btn.textContent = '✓ Confirmar'; btn.classList.remove('btn-out'); btn.classList.add('btn-blue'); }
+  }
 }
 
 function addItemCarregAlterar() {
@@ -1678,7 +1944,13 @@ async function processarCodigoCarregAlterar(idx, codigo) {
     if (caixa.status === 'expedida') {
       toast('Atenção: esta caixa já foi expedida em outro carregamento.', true);
     }
+    // Preserva id/salvo se este item já tinha sido confirmado antes —
+    // senão a próxima confirmação criaria um item duplicado em vez de
+    // atualizar o existente.
+    const prevAlt = novosItensCarregAlterar[idx];
     novosItensCarregAlterar.splice(idx, 1, {
+      id: prevAlt ? prevAlt.id : undefined,
+      salvo: false,
       codigo_item: caixa.codigo_barras,
       descricao: 'Caixa contendo itens',
       quantidade: 1,
@@ -1696,25 +1968,71 @@ async function processarCodigoCarregAlterar(idx, codigo) {
   }
 }
 
-async function salvarAlteracaoCarregamento() {
-  const itens = novosItensCarregAlterar
-    .map(i => ({ codigo_item: (i.codigo_item || '').trim(), descricao: (i.descricao || '').trim(), quantidade: parseFloat(i.quantidade) || 0, caixa_id: i.caixa_id || null, caixa_item_id: i.caixa_item_id || null }))
-    .filter(i => i.codigo_item && i.descricao && i.quantidade > 0);
+// Confirma (salva no servidor) o item da linha idx: adiciona ao
+// carregamento (POST) se ainda não tinha sido salvo, ou atualiza (PUT)
+// se já existia e foi editado depois.
+async function confirmarItemCarregAlterar(idx) {
+  const it = novosItensCarregAlterar[idx];
+  const codigo_item = (it.codigo_item || '').trim();
+  const descricao = (it.descricao || '').trim();
+  const quantidade = parseFloat(it.quantidade) || 0;
+  if (!codigo_item || !descricao || !quantidade) {
+    toast('Preencha código, descrição e quantidade antes de confirmar.', true);
+    return false;
+  }
+  it.codigo_item = codigo_item; it.descricao = descricao; it.quantidade = quantidade;
 
-  if (!itens.length) { toast('Inclua ao menos um novo item.', true); return; }
-
-  const btn = document.getElementById('btn-salvar-carreg-alterar');
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  const btn = document.getElementById(`btn-confirmar-carreg-alterar-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
-    const data = await api('POST', `/carregamentos/${alterandoCarregamentoId}/itens`, { itens });
-    toast(data.mensagem || 'Itens adicionados.');
-    fecharModal('mo-carregamento-alterar');
-    carregarHistorico();
+    if (!it.id) {
+      const data = await api('POST', `/carregamentos/${alterandoCarregamentoId}/itens`, {
+        itens: [{ codigo_item, descricao, quantidade, caixa_id: it.caixa_id || null, caixa_item_id: it.caixa_item_id || null }],
+      });
+      it.id = data.itens_ids[0];
+    } else {
+      await api('PUT', `/carregamentos/${alterandoCarregamentoId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+    }
+    it.salvo = true;
+    if (idx === novosItensCarregAlterar.length - 1) {
+      novosItensCarregAlterar.push({ codigo_item: '', descricao: '', quantidade: 1 });
+    }
+    renderItensCarregAlterar();
+    toast('Item salvo.');
+    return true;
   } catch (e) {
     toast(e.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Salvar Alteração';
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
+    return false;
   }
+}
+
+// "Fechar" só encerra a janela — os itens já foram salvos um a um. Se
+// sobrar uma última linha preenchida mas não confirmada, confirma
+// antes de fechar.
+async function salvarAlteracaoCarregamento() {
+  const btn = document.getElementById('btn-salvar-carreg-alterar');
+  const ultimoIdx = novosItensCarregAlterar.length - 1;
+  const ultimo = novosItensCarregAlterar[ultimoIdx];
+  const ultimoPreenchido = !!(ultimo && (ultimo.codigo_item || '').trim() && (ultimo.descricao || '').trim() && parseFloat(ultimo.quantidade) > 0);
+  const precisaConfirmar = ultimoPreenchido && !ultimo.salvo;
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    if (precisaConfirmar) {
+      const ok = await confirmarItemCarregAlterar(ultimoIdx);
+      if (!ok) return;
+    }
+    fecharModal('mo-carregamento-alterar');
+    carregarHistorico();
+  } finally {
+    btn.disabled = false; btn.textContent = 'Fechar';
+  }
+}
+
+function fecharAlterarCarregamento() {
+  fecharModal('mo-carregamento-alterar');
+  carregarHistorico();
 }
 
 // ── FINALIZAR CARREGAMENTO ──────────────────────────────
@@ -1795,7 +2113,13 @@ async function processarCodigoCarregamento(idx, codigo) {
     if (caixa.status === 'expedida') {
       toast('Atenção: esta caixa já foi expedida em outro carregamento.', true);
     }
+    // Preserva id/salvo se este item já tinha sido confirmado antes —
+    // senão a próxima confirmação criaria um item duplicado em vez de
+    // atualizar o existente.
+    const prevIt = itensAtuais[idx];
     itensAtuais.splice(idx, 1, {
+      id: prevIt ? prevIt.id : undefined,
+      salvo: false,
       codigo_item: caixa.codigo_barras,
       descricao: 'Caixa contendo itens',
       quantidade: 1,
