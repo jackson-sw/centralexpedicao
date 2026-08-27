@@ -5,11 +5,17 @@ const bwipjs = require('bwip-js');
 const MM = 2.83464567;
 function mm(v) { return v * MM; }
 
+// Formata sempre no horário de Brasília, independente do fuso horário
+// configurado no sistema operacional do servidor onde o Node roda —
+// sem isso, um servidor com relógio em UTC (comum em VPS/containers)
+// mostra a hora 3h adiantada mesmo com o dado já correto no banco.
+const TZ_BRASIL = 'America/Sao_Paulo';
+
 function fmtDT(data) {
   if (!data) return '—';
   const d = new Date(data);
   if (isNaN(d)) return '—';
-  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('pt-BR', { timeZone: TZ_BRASIL }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: TZ_BRASIL, hour: '2-digit', minute: '2-digit' });
 }
 
 // Lê largura/altura (em px) direto do cabeçalho IHDR do PNG — o

@@ -2232,10 +2232,13 @@ function preencherCidadesDatalist(lista) {
 function labelProjeto(c) {
   return c.sequencial_projeto ? `${c.numero_projeto}-${c.sequencial_projeto}` : `${c.numero_projeto}`;
 }
+// timeZone explícito: o celular normalmente já está certo, mas isso
+// evita qualquer exibição errada se o aparelho estiver configurado
+// com outro fuso (ex: viagem, configuração automática falhando etc.).
 function fmtDT(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '—';
-  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 }
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

@@ -31,7 +31,7 @@ if (!AGENT_API_KEY) {
 }
 
 function log(...args) {
-  console.log(`[${new Date().toLocaleString('pt-BR')}]`, ...args);
+  console.log(`[${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]`, ...args);
 }
 
 async function buscarPendentes() {

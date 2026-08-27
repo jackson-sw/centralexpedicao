@@ -298,7 +298,7 @@ router.post('/:id/romaneio', auth, async (req, res) => {
           subject: `Romaneio — Caixa ${caixa.codigo_barras || caixa.id}`,
           html: `
             <p>Segue em anexo o romaneio da caixa <strong>${caixa.codigo_barras || ('#' + caixa.id)}</strong>,
-            finalizada em ${new Date(caixa.fechado_em).toLocaleString('pt-BR')}.</p>
+            finalizada em ${new Date(caixa.fechado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.</p>
             <p>Responsável(is): ${responsaveis.join(', ') || '—'}</p>
             <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
           `,

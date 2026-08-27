@@ -339,7 +339,7 @@ router.post('/:id/romaneio', auth, async (req, res) => {
           html: `
             <p>Segue em anexo o romaneio do carregamento <strong>#${labelProjeto(carregamento)}</strong>,
             placa <strong>${carregamento.placa || '—'}</strong>, destino ${carregamento.cidade_destino},
-            registrado em ${new Date(carregamento.criado_em).toLocaleString('pt-BR')}.</p>
+            registrado em ${new Date(carregamento.criado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.</p>
             <p style="color:#6b7280;font-size:12px">Central Expedição — Burntech Caldeiras (e-mail automático)</p>
           `,
           attachments: [{ filename: nomeArquivo, content: pdfBuffer, contentType: 'application/pdf' }],
