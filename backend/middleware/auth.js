@@ -51,4 +51,15 @@ function apenasAdmin(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasEmCampo, apenasAdmin };
+// Bloqueio: exclusão de item já salvo de um carregamento em andamento
+// é uma ação sensível (some do banco de vez), então diferente de
+// apenasExpedicao acima, aqui restringimos só ao perfil Expedição
+// Administrativo — nem o perfil Expedição comum tem esse botão.
+function apenasExpedicaoAdministrativo(req, res, next) {
+  if (req.usuario?.perfil !== 'expedicao_administrativo') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Expedição Administrativo.' });
+  }
+  next();
+}
+
+module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };

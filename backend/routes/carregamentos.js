@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasExpedicao, apenasEmCampo } = require('../middleware/auth');
+const { auth, apenasExpedicao, apenasEmCampo, apenasExpedicaoAdministrativo } = require('../middleware/auth');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioCarregamentoPDF } = require('../pdf/romaneioCarregamento');
 const { gerarRomaneioFaltantesPDF } = require('../pdf/romaneioFaltantes');
@@ -254,6 +254,59 @@ router.put('/:carregamentoId/itens/:itemId', auth, apenasExpedicao, async (req, 
   } catch (err) {
     console.error('[PUT /carregamentos/:carregamentoId/itens/:itemId]', err.message);
     res.status(500).json({ erro: 'Erro ao atualizar item.' });
+  }
+});
+
+// DELETE /api/carregamentos/:carregamentoId/itens/:itemId — exclui um
+// item já salvo de um carregamento em andamento. Só o perfil Expedição
+// Administrativo tem esse botão (ver apenasExpedicaoAdministrativo) —
+// é uma ação irreversível, diferente do simples "confirmar/editar" que
+// qualquer Expedição pode fazer. Se o item excluído era uma caixa
+// inteira (caixa_id preenchido) e nenhum outro carregamento ainda
+// referencia essa caixa, ela volta para "fechada" — assim pode ser
+// escaneada de novo em outro carregamento em vez de ficar presa como
+// "expedida" para sempre.
+router.delete('/:carregamentoId/itens/:itemId', auth, apenasExpedicaoAdministrativo, async (req, res) => {
+  try {
+    const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.carregamentoId]);
+    if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
+    if (carregamento.status !== 'em_andamento') {
+      return res.status(409).json({ erro: 'Este carregamento já foi finalizado e não aceita alterações.' });
+    }
+
+    const [[item]] = await db.query(
+      'SELECT id, caixa_id FROM carregamento_itens WHERE id = ? AND carregamento_id = ?',
+      [req.params.itemId, carregamento.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não pertence a este carregamento.' });
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.query('DELETE FROM carregamento_itens WHERE id = ?', [item.id]);
+
+      if (item.caixa_id) {
+        const [[{ restantes }]] = await conn.query(
+          'SELECT COUNT(*) AS restantes FROM carregamento_itens WHERE caixa_id = ?',
+          [item.caixa_id]
+        );
+        if (!restantes) {
+          await conn.query(`UPDATE caixas SET status = 'fechada', expedido_em = NULL WHERE id = ?`, [item.caixa_id]);
+        }
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    res.json({ id: item.id, mensagem: 'Item excluído do carregamento.' });
+  } catch (err) {
+    console.error('[DELETE /carregamentos/:carregamentoId/itens/:itemId]', err.message);
+    res.status(500).json({ erro: 'Erro ao excluir item do carregamento.' });
   }
 });
 

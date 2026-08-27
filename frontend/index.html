@@ -1851,6 +1851,45 @@ function fecharNovoCarregamento() {
   if (carregamentoEmCriacaoId) carregarHistorico();
 }
 
+// Lista de itens já salvos, dentro de "Alterar Carregamento". O botão
+// de excluir (x vermelho) só aparece para o perfil Expedição
+// Administrativo — ver excluirItemCarregamentoExistente logo abaixo.
+function renderItensExistentesCarregAlterar(itens) {
+  const podeExcluir = PERFIL === 'expedicao_administrativo';
+  document.getElementById('alt-carreg-itens-existentes').innerHTML = `
+    <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${itens.length})</label></div>
+    ${itens.map(i => `
+      <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="cc-itens-count">${i.quantidade}x</span>
+            ${podeExcluir ? `<button type="button" class="mat-remove" style="color:#dc2626" onclick="excluirItemCarregamentoExistente(${i.id})" title="Excluir item">✕</button>` : ''}
+          </div>
+        </div>
+        <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
+        ${i.caixa_id ? `<div class="cc-from-box">🧰 Item da caixa #${i.caixa_id}</div>` : ''}
+      </div>
+    `).join('')}
+  `;
+}
+
+// Exclui (de vez, sem desfazer) um item já salvo do carregamento em
+// andamento. Restrito no backend ao perfil Expedição Administrativo
+// (rota DELETE /carregamentos/:id/itens/:itemId) — o botão nem aparece
+// pros outros perfis, mas o servidor também recusa por segurança.
+async function excluirItemCarregamentoExistente(itemId) {
+  if (!confirm('Excluir este item do carregamento? Essa ação não pode ser desfeita.')) return;
+  try {
+    await api('DELETE', `/carregamentos/${alterandoCarregamentoId}/itens/${itemId}`);
+    const c = await api('GET', '/carregamentos/' + alterandoCarregamentoId);
+    renderItensExistentesCarregAlterar(c.itens);
+    toast('Item excluído.');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 // ── ALTERAR CARREGAMENTO (adicionar itens a um carregamento em andamento) ──
 async function abrirAlterarCarregamento(id) {
   try {
@@ -1858,19 +1897,7 @@ async function abrirAlterarCarregamento(id) {
     alterandoCarregamentoId = id;
     document.getElementById('alt-carreg-sub').textContent =
       '#' + labelProjeto(c) + ' — confirme cada item novo pra salvar na hora.';
-    document.getElementById('alt-carreg-itens-existentes').innerHTML = `
-      <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
-      ${c.itens.map(i => `
-        <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;gap:8px">
-            <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
-            <span class="cc-itens-count">${i.quantidade}x</span>
-          </div>
-          <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
-          ${i.caixa_id ? `<div class="cc-from-box">🧰 Item da caixa #${i.caixa_id}</div>` : ''}
-        </div>
-      `).join('')}
-    `;
+    renderItensExistentesCarregAlterar(c.itens);
     novosItensCarregAlterar = [{ codigo_item: '', descricao: '', quantidade: 1 }];
     renderItensCarregAlterar();
     fecharModal('mo-detalhe');
