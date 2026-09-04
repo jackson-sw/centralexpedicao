@@ -673,6 +673,16 @@ function permiteEntradaManual() {
   return PERFIL === 'expedicao_administrativo';
 }
 
+// Quem pode marcar/desmarcar um item do desembarque tocando direto na
+// lista, sem precisar escanear o código de barras — Em Campo (a pedido
+// do usuário, pra agilizar a conferência) e Expedição Administrativo
+// (que já tinha essa liberdade via permiteEntradaManual). A digitação
+// manual do código continua exclusiva de permiteEntradaManual — ver
+// confirmarCodigoManual e o campo de texto em abrirDesembarque.
+function permiteTocarItemDesembarque() {
+  return PERFIL === 'em_campo' || PERFIL === 'expedicao_administrativo';
+}
+
 // ── HELPER API ────────────────────────────────────────
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -971,9 +981,9 @@ function fecharDesembarque() {
 
 function renderItensDesembarque() {
   const el = document.getElementById('desemb-lista-itens');
-  const manual = permiteEntradaManual();
+  const podeTocar = permiteTocarItemDesembarque();
   el.innerHTML = desembarqueItens.map(i => `
-    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''} ${manual ? 'clicavel' : ''}" ${manual ? `onclick="toggleItemDesembarque(${i.id})"` : ''}>
+    <div class="desemb-item ${i.desembarcado_em ? 'ok' : ''} ${podeTocar ? 'clicavel' : ''}" ${podeTocar ? `onclick="toggleItemDesembarque(${i.id})"` : ''}>
       <div class="desemb-item-check">${i.desembarcado_em ? '✓' : ''}</div>
       <div class="desemb-item-info">
         <div class="desemb-item-cod">
@@ -1001,14 +1011,13 @@ function atualizarProgressoDesembarque() {
   document.getElementById('desemb-progress-label').textContent = `${ok} de ${total} itens conferidos`;
 }
 
-// Para os perfis Em Campo e Expedição, o único jeito de confirmar um
-// item no desembarque é a leitura do código de barras pela câmera
-// (abrirScannerDesembarque → abrirScanner tipo 'desembarque') — não
-// existe digitação manual nem toque na lista, para evitar que um item
-// seja dado como descarregado sem ter sido realmente escaneado. O
-// perfil Expedição Administrativo é a exceção (ver
-// permiteEntradaManual): também pode digitar o código no campo manual
-// (confirmarCodigoManual) ou tocar direto no item (toggleItemDesembarque).
+// Confirma um item do desembarque a partir do código lido pela câmera
+// (abrirScannerDesembarque → abrirScanner tipo 'desembarque'). Também é
+// chamada pela digitação manual (confirmarCodigoManual, exclusiva do
+// perfil Expedição Administrativo — ver permiteEntradaManual). Marcar
+// direto na lista sem ler nada é outro caminho, liberado para Em Campo
+// e Expedição Administrativo — ver permiteTocarItemDesembarque e
+// toggleItemDesembarque.
 // Resolve o item pelo código dentro da lista já carregada deste
 // carregamento (evita mais uma chamada ao servidor).
 async function confirmarCodigoDesembarque(codigo) {
@@ -1040,11 +1049,11 @@ async function confirmarCodigoManual() {
 }
 
 // Marca/desmarca manualmente um item como conferido, tocando na linha
-// — só disponível para o perfil Expedição Administrativo (ver
-// permiteEntradaManual e renderItensDesembarque, que só liga este
-// onclick para esse perfil).
+// — disponível para Em Campo e Expedição Administrativo (ver
+// permiteTocarItemDesembarque e renderItensDesembarque, que só liga
+// este onclick para esses perfis).
 async function toggleItemDesembarque(itemId) {
-  if (!permiteEntradaManual()) return;
+  if (!permiteTocarItemDesembarque()) return;
   const item = desembarqueItens.find(i => i.id === itemId);
   if (!item) return;
   const novoValor = !item.desembarcado_em;
