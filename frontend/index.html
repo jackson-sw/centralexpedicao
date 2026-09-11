@@ -671,6 +671,11 @@ let campoCache = [];
 let desembarqueCarregamentoId = null;
 let desembarqueItens = [];
 let alterandoCarregamentoId = null;
+// Número do projeto do carregamento sendo alterado — guardado à parte
+// porque, diferente de "Novo Carregamento", a tela "Alterar
+// Carregamento" não tem campo de projeto (ele já foi fixado quando o
+// carregamento foi criado). Usado por validarProjetoAoSairDoCodigo.
+let alterandoCarregamentoNumeroProjeto = null;
 let novosItensCarregAlterar = [];
 
 // Único perfil que pode digitar código de item manualmente (em vez de
@@ -1722,7 +1727,7 @@ function renderItens() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItem(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento',${idx})"` : 'readonly'}>
+          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItem(${idx},'codigo_item',this.value)" onblur="validarProjetoAoSairDoCodigo('carregamento',${idx})"` : 'readonly'}>
           <button type="button" class="btn-cam" onclick="abrirScanner('carregamento',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
@@ -1929,6 +1934,7 @@ async function abrirAlterarCarregamento(id) {
   try {
     const c = await api('GET', '/carregamentos/' + id);
     alterandoCarregamentoId = id;
+    alterandoCarregamentoNumeroProjeto = c.numero_projeto;
     document.getElementById('alt-carreg-sub').textContent =
       '#' + labelProjeto(c) + ' — confirme cada item novo pra salvar na hora.';
     renderItensExistentesCarregAlterar(c.itens);
@@ -1953,7 +1959,7 @@ function renderItensCarregAlterar() {
       <div class="fg" style="margin-bottom:8px">
         <label>Código do item *</label>
         <div class="mat-cod-row">
-          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItemCarregAlterar(${idx},'codigo_item',this.value)" onblur="preencherDescricaoPorCodigo('carregamento-alterar',${idx})"` : 'readonly'}>
+          <input placeholder="${manual ? 'Escaneie ou digite o código' : 'Toque em 📷 e escaneie o código de barras'}" value="${escapeAttr(it.codigo_item)}" ${manual ? `oninput="atualizaItemCarregAlterar(${idx},'codigo_item',this.value)" onblur="validarProjetoAoSairDoCodigo('carregamento-alterar',${idx})"` : 'readonly'}>
           <button type="button" class="btn-cam" onclick="abrirScanner('carregamento-alterar',${idx})" title="Escanear código de barras">📷</button>
         </div>
       </div>
@@ -2022,6 +2028,7 @@ async function processarCodigoCarregAlterar(idx, codigo) {
     renderItensCarregAlterar();
     toast(`Caixa ${caixa.codigo_barras} adicionada ao carregamento.`);
   } catch (e) {
+    if (recusarItemForaDoProjeto(codigo, alterandoCarregamentoNumeroProjeto)) return;
     atualizaItemCarregAlterar(idx, 'codigo_item', codigo);
     renderItensCarregAlterar();
     preencherDescricaoPorCodigo('carregamento-alterar', idx);
@@ -2163,11 +2170,39 @@ async function abrirScanner(tipo, idx) {
   }
 }
 
+// ── VALIDAÇÃO DE PROJETO DO ITEM (Novo Carregamento / Alterar Carregamento) ──
+// Os códigos de item avulso seguem o padrão "PROJETO-CODIGO" (ex.:
+// "240724-GRL067"). Para pegar leitura errada na hora (item de outro
+// carregamento/projeto escaneado por engano), comparamos o prefixo com
+// o Nº do Projeto deste carregamento. Um código sem hífen (fora do
+// padrão) não é bloqueado — não dá pra saber a qual projeto pertence,
+// então passa direto. Código de caixa inteira (formato "CX000015") nem
+// passa por aqui — ver os ramos de sucesso em processarCodigoCarregamento
+// e processarCodigoCarregAlterar.
+function codigoPertenceAoProjeto(codigo, numeroProjeto) {
+  const separador = codigo.indexOf('-');
+  if (separador === -1) return true;
+  const prefixo = codigo.slice(0, separador).trim();
+  return prefixo === (numeroProjeto || '').trim();
+}
+
+// Se o código não pertence ao projeto do carregamento, avisa e recusa
+// a leitura — retorna true nesse caso (quem chamou não deve preencher
+// a linha com esse código). Chamada tanto na leitura por câmera quanto
+// na digitação manual (Expedição Administrativo).
+function recusarItemForaDoProjeto(codigo, numeroProjeto) {
+  if (codigoPertenceAoProjeto(codigo, numeroProjeto)) return false;
+  const prefixo = codigo.split('-')[0];
+  toast(`Item ${codigo} é do projeto ${prefixo}, não do ${numeroProjeto} deste carregamento. Item não adicionado.`, true);
+  return true;
+}
+
 // Ao ler um código dentro do "Novo Carregamento", verifica se ele
 // corresponde a uma caixa fechada no almoxarifado. Se for, adiciona
 // UMA única linha representando a caixa inteira (não abre os itens
 // individuais dela — isso fica só no controle do Almoxarifado). Se
-// não for (item avulso normal), só preenche o campo.
+// não for (item avulso normal), confere o projeto (ver
+// codigoPertenceAoProjeto) e só então preenche o campo.
 async function processarCodigoCarregamento(idx, codigo) {
   try {
     const caixa = await api('GET', '/caixas/codigo/' + encodeURIComponent(codigo));
@@ -2192,11 +2227,45 @@ async function processarCodigoCarregamento(idx, codigo) {
     toast(`Caixa ${caixa.codigo_barras} adicionada ao carregamento.`);
   } catch (e) {
     // Código não corresponde a nenhuma caixa — trata como item avulso normal.
+    const numero_projeto = document.getElementById('nc-projeto').value.trim();
+    if (recusarItemForaDoProjeto(codigo, numero_projeto)) return;
     atualizaItem(idx, 'codigo_item', codigo);
     renderItens();
     preencherDescricaoPorCodigo('carregamento', idx);
     toast('Código lido: ' + codigo);
   }
+}
+
+// Chamada no onblur do campo de código de item avulso, quando digitado
+// manualmente (só Expedição Administrativo, ver permiteEntradaManual).
+// Faz a mesma checagem de projeto da leitura por câmera antes de
+// buscar a descrição no catálogo (ver codigoPertenceAoProjeto/
+// recusarItemForaDoProjeto) — se o item for de outro projeto, limpa a
+// linha na hora em vez de preencher a descrição.
+function validarProjetoAoSairDoCodigo(tipo, idx) {
+  const arr = tipo === 'carregamento' ? itensAtuais : novosItensCarregAlterar;
+  const item = arr[idx];
+  if (!item || item.caixa_id) return; // caixa inteira não tem prefixo de projeto
+  const codigo = (item.codigo_item || '').trim();
+  if (!codigo) return;
+
+  const numeroProjeto = tipo === 'carregamento'
+    ? document.getElementById('nc-projeto').value.trim()
+    : alterandoCarregamentoNumeroProjeto;
+
+  if (recusarItemForaDoProjeto(codigo, numeroProjeto)) {
+    if (tipo === 'carregamento') {
+      atualizaItem(idx, 'codigo_item', '');
+      atualizaItem(idx, 'descricao', '');
+      renderItens();
+    } else {
+      atualizaItemCarregAlterar(idx, 'codigo_item', '');
+      atualizaItemCarregAlterar(idx, 'descricao', '');
+      renderItensCarregAlterar();
+    }
+    return;
+  }
+  preencherDescricaoPorCodigo(tipo, idx);
 }
 
 // ── AUTO-PREENCHIMENTO DA DESCRIÇÃO A PARTIR DO CATÁLOGO ──
