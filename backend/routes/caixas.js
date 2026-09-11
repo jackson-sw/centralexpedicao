@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasAlmoxarifado } = require('../middleware/auth');
+const { auth, apenasMontagemCaixa } = require('../middleware/auth');
 const { ALMOXARIFADO_RESPONSAVEIS } = require('../constants');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioPDF } = require('../pdf/romaneio');
@@ -73,11 +73,15 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/caixas — abrir uma nova caixa (Almoxarifado)
+// POST /api/caixas — abrir uma nova caixa (Almoxarifado ou Expedição)
 // A caixa nasce com status "aberta" e SEM código de barras — o código
 // só é gerado ao finalizar (POST /:id/finalizar). Enquanto aberta, ela
 // pode receber mais itens de outros responsáveis via POST /:id/itens.
-router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
+// O código de barras (CX + id) sai direto do AUTO_INCREMENT da tabela
+// caixas — como é uma tabela só, compartilhada pelos dois perfis, a
+// numeração segue uma sequência única independente de quem criou cada
+// caixa (não existe uma sequência separada por perfil).
+router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { responsavel_nome, numero_projeto, observacoes, itens } = req.body;
 
@@ -135,7 +139,7 @@ router.post('/', auth, apenasAlmoxarifado, async (req, res) => {
 // caixa ainda aberta. Exige o responsável que está adicionando os
 // itens nesta rodada — cada rodada fica registrada por item, então
 // uma mesma caixa pode ter itens de vários responsáveis diferentes.
-router.post('/:id/itens', auth, apenasAlmoxarifado, async (req, res) => {
+router.post('/:id/itens', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { responsavel_nome, itens } = req.body;
 
@@ -201,7 +205,7 @@ router.post('/:id/itens', auth, apenasAlmoxarifado, async (req, res) => {
 // código/descrição/quantidade). Só funciona enquanto a caixa estiver
 // aberta; não mexe no responsável do item (fica o de quando foi
 // criado).
-router.put('/:caixaId/itens/:itemId', auth, apenasAlmoxarifado, async (req, res) => {
+router.put('/:caixaId/itens/:itemId', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { codigo_item, descricao, quantidade } = req.body;
     if (!codigo_item || !descricao || !quantidade) {
@@ -229,7 +233,7 @@ router.put('/:caixaId/itens/:itemId', auth, apenasAlmoxarifado, async (req, res)
 
 // POST /api/caixas/:id/finalizar — fecha a caixa: grava a data/hora
 // de fechamento e gera o código de barras (pronto para etiqueta).
-router.post('/:id/finalizar', auth, apenasAlmoxarifado, async (req, res) => {
+router.post('/:id/finalizar', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const [[caixa]] = await db.query('SELECT id, status FROM caixas WHERE id = ?', [req.params.id]);
     if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });

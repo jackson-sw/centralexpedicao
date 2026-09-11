@@ -25,10 +25,16 @@ function apenasExpedicao(req, res, next) {
   next();
 }
 
-// Bloqueio: só o perfil Almoxarifado pode montar/fechar novas caixas.
-function apenasAlmoxarifado(req, res, next) {
-  if (req.usuario?.perfil !== 'almoxarifado') {
-    return res.status(403).json({ erro: 'Acesso restrito ao perfil Almoxarifado.' });
+// Bloqueio: quem pode montar/alterar/fechar caixas — Almoxarifado
+// (dono original da tela) e Expedição (que também monta caixa quando
+// precisa, direto do pátio, usando a mesma lógica/tela). NÃO inclui
+// Expedição Administrativo: esse perfil não tem impressora Argox
+// configurada (ver permiteImprimirEtiqueta no frontend e
+// IMPRESSORA_POR_PERFIL em backend/routes/etiquetas.js), então o botão
+// "Nova Caixa" nem aparece pra ele.
+function apenasMontagemCaixa(req, res, next) {
+  if (!['almoxarifado', 'expedicao'].includes(req.usuario?.perfil)) {
+    return res.status(403).json({ erro: 'Acesso restrito aos perfis Almoxarifado e Expedição.' });
   }
   next();
 }
@@ -62,4 +68,4 @@ function apenasExpedicaoAdministrativo(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasAlmoxarifado, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };
+module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };

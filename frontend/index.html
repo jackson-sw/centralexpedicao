@@ -343,7 +343,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 
       <div class="summary">
         <span class="ptitle">Histórico</span>
-        <button class="btn btn-red" onclick="abrirNovoCarregamento()">+ Novo Carregamento</button>
+        <div style="display:flex;gap:8px">
+          <!-- Só visível para o perfil Expedição puro (ver boot()) — monta
+               caixa usando a mesma tela/lógica do Almoxarifado (abrirNovaCaixa),
+               mas fica escondido de Expedição Administrativo, que não tem
+               impressora Argox configurada (ver permiteImprimirEtiqueta). -->
+          <button class="btn btn-blue" id="btn-nova-caixa-exp" style="display:none" onclick="abrirNovaCaixa()">+ Nova Caixa</button>
+          <button class="btn btn-red" onclick="abrirNovoCarregamento()">+ Novo Carregamento</button>
+        </div>
       </div>
 
       <div class="hist-tabs">
@@ -356,6 +363,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     </div>
 
     <div class="fab-wrap">
+      <button class="fab" id="fab-nova-caixa-exp" style="display:none;background:linear-gradient(145deg,#2563eb,#1d4ed8)" onclick="abrirNovaCaixa()" title="Nova Caixa" aria-label="Nova Caixa">🧰</button>
       <button class="fab" onclick="abrirNovoCarregamento()" title="Novo Carregamento" aria-label="Novo Carregamento">+</button>
     </div>
   </div>
@@ -750,6 +758,11 @@ function boot() {
     roleEl.textContent = 'Expedição';
     roleEl.className = 'hrole r-exp';
     document.getElementById('view-expedicao').style.display = 'block';
+    // Nova Caixa: só o perfil Expedição puro tem essa liberdade (ver
+    // apenasMontagemCaixa no backend) — o botão/fab ficam escondidos por
+    // padrão no HTML e só aparecem aqui.
+    document.getElementById('btn-nova-caixa-exp').style.display = '';
+    document.getElementById('fab-nova-caixa-exp').style.display = '';
     carregarHistorico();
     carregarCaixas('lista-caixas');
     pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); }, 25000);
@@ -1187,7 +1200,10 @@ async function verDetalheCaixa(id) {
 function renderFooterCaixaDetalhe(c) {
   const footer = document.getElementById('det2-footer');
   let botoes = '';
-  if (PERFIL === 'almoxarifado' && c.status === 'aberta') {
+  // Alterar/Finalizar uma caixa aberta: Almoxarifado (tela original) e
+  // Expedição (que agora também monta caixa, ver btn-nova-caixa-exp em
+  // boot() e apenasMontagemCaixa no backend).
+  if ((PERFIL === 'almoxarifado' || PERFIL === 'expedicao') && c.status === 'aberta') {
     botoes += `<button class="btn btn-out" onclick="abrirAlterarCaixa(${c.id})">✏️ Alterar</button>`;
     botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
   }
@@ -1206,6 +1222,15 @@ function renderFooterCaixaDetalhe(c) {
 // id da caixa já criada no servidor nesta sessão do modal "Nova Caixa"
 // — null até o primeiro item ser confirmado (ver confirmarItemCaixa).
 let caixaEmCriacaoId = null;
+
+// Qual <div> de listagem de caixas atualizar depois de criar/alterar/
+// finalizar uma caixa — Almoxarifado tem a própria tela
+// (lista-caixas-almox); Expedição (que também monta caixa agora, ver
+// btn-nova-caixa-exp) usa a aba "Caixas" do histórico compartilhado
+// (lista-caixas).
+function idListaCaixasAtual() {
+  return PERFIL === 'almoxarifado' ? 'lista-caixas-almox' : 'lista-caixas';
+}
 
 function abrirNovaCaixa() {
   document.getElementById('cx-responsavel').value = '';
@@ -1367,7 +1392,7 @@ async function salvarCaixa() {
     }
     toast('Caixa salva. Use "Finalizar" quando estiver pronta.');
     fecharModal('mo-caixa');
-    carregarCaixas('lista-caixas-almox');
+    carregarCaixas(idListaCaixasAtual());
   } finally {
     btn.disabled = false; btn.textContent = 'Salvar';
   }
@@ -1378,7 +1403,7 @@ async function salvarCaixa() {
 // pra descartar — só atualiza a lista em segundo plano.
 function fecharNovaCaixa() {
   fecharModal('mo-caixa');
-  if (caixaEmCriacaoId) carregarCaixas('lista-caixas-almox');
+  if (caixaEmCriacaoId) carregarCaixas(idListaCaixasAtual());
 }
 
 // ── ALTERAR CAIXA (adicionar novos itens a uma caixa aberta) ──
@@ -1531,7 +1556,7 @@ async function salvarAlteracaoCaixa() {
       if (!ok) return;
     }
     fecharModal('mo-caixa-alterar');
-    carregarCaixas('lista-caixas-almox');
+    carregarCaixas(idListaCaixasAtual());
   } finally {
     btn.disabled = false; btn.textContent = 'Fechar';
   }
@@ -1539,7 +1564,7 @@ async function salvarAlteracaoCaixa() {
 
 function fecharAlterarCaixa() {
   fecharModal('mo-caixa-alterar');
-  carregarCaixas('lista-caixas-almox');
+  carregarCaixas(idListaCaixasAtual());
 }
 
 // ── FINALIZAR CAIXA ────────────────────────────────────
@@ -1550,7 +1575,7 @@ async function finalizarCaixa(id) {
     fecharModal('mo-caixa-detalhe');
     ultimaCaixaGerada = data;
     mostrarResultadoCaixa(data.codigo_barras);
-    carregarCaixas('lista-caixas-almox');
+    carregarCaixas(idListaCaixasAtual());
   } catch (e) {
     toast(e.message, true);
   }
