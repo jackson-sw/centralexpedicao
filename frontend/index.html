@@ -643,7 +643,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <button class="mx" onclick="fecharScanner()">×</button>
     </div>
     <div id="scanner-viewport"></div>
-    <div class="scanner-hint">Aponte a câmera para o código de barras do item.</div>
+    <div class="scanner-hint">Aponte a câmera para o código de barras do item. Em códigos pequenos, aproxime bem e mantenha o aparelho firme.</div>
     <div class="scanner-fallback">
       <button class="btn btn-out" style="width:100%;justify-content:center" onclick="fecharScanner()">Digitar manualmente</button>
     </div>
@@ -2139,8 +2139,15 @@ async function abrirScanner(tipo, idx) {
       Html5QrcodeSupportedFormats.QR_CODE,
     ];
     await scannerAtivo.start(
-      { facingMode: 'environment' },
-      { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
+      // No iPhone (Safari), sem pedir uma resolução mínima o
+      // getUserMedia costuma entregar um vídeo bem mais baixo do que
+      // no Android/Chrome — suficiente pra ler o código de barras
+      // grande da caixa (impresso maior, alto contraste), mas não pra
+      // ler os códigos menores/mais densos das etiquetas de item.
+      // Pedir explicitamente uma resolução alta (o navegador ajusta
+      // para o que a câmera suportar) resolve isso.
+      { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+      { fps: 12, qrbox: { width: 280, height: 160 }, formatsToSupport: formatsSupported },
       (decodedText) => {
         const ctx = scannerContext;
         fecharScanner();
