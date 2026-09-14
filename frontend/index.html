@@ -2165,9 +2165,41 @@ async function abrirScanner(tipo, idx) {
       () => {}
     );
   } catch (e) {
-    toast('Não foi possível acessar a câmera. Digite o código manualmente.', true);
+    // Loga o erro real (nome/mensagem do navegador) no console — o
+    // toast antigo escondia isso, dificultando o diagnóstico remoto
+    // (ex.: pelo WhatsApp) de por que a câmera não abriu num aparelho
+    // específico. Ver também MENSAGENS_ERRO_CAMERA logo abaixo.
+    console.error('Falha ao abrir a câmera:', e && e.name, e && e.message, e);
+    toast(mensagemErroCamera(e), true);
     fecharScanner();
   }
+}
+
+// Traduz os erros mais comuns de getUserMedia (usados pelo Html5Qrcode)
+// em uma orientação que a pessoa consiga resolver sozinha, em vez do
+// aviso genérico de antes. No Safari/iOS, "NotAllowedError" costuma
+// significar que a permissão de câmera para este site ficou marcada
+// como negada (Ajustes > Safari > Câmera, ou "aA" na barra de endereço
+// > Configurações do Site) — precisa permitir manualmente, o iOS não
+// pergunta de novo sozinho depois de uma negação.
+function mensagemErroCamera(e) {
+  const nome = e && e.name;
+  if (nome === 'NotAllowedError' || nome === 'PermissionDeniedError') {
+    return 'Permissão de câmera negada para este site. No iPhone: toque em "aA" na barra de endereço > Configurações do Site > Câmera > Permitir (ou Ajustes > Safari > Câmera). Depois recarregue a página.';
+  }
+  if (nome === 'NotFoundError' || nome === 'DevicesNotFoundError') {
+    return 'Nenhuma câmera foi encontrada neste aparelho.';
+  }
+  if (nome === 'NotReadableError' || nome === 'TrackStartError') {
+    return 'A câmera está sendo usada por outro aplicativo. Feche outros apps que usem a câmera e tente novamente.';
+  }
+  if (nome === 'OverconstrainedError' || nome === 'ConstraintNotSatisfiedError') {
+    return 'A câmera do aparelho não atende ao modo solicitado. Digite o código manualmente.';
+  }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    return 'A câmera só funciona em conexão segura (https). Acesse o sistema por um endereço https:// e tente novamente.';
+  }
+  return 'Não foi possível acessar a câmera' + (nome ? ' (' + nome + ')' : '') + '. Digite o código manualmente.';
 }
 
 // ── VALIDAÇÃO DE PROJETO DO ITEM (Novo Carregamento / Alterar Carregamento) ──
