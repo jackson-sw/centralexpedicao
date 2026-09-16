@@ -10,7 +10,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 - `frontend/manifest.json` + `frontend/service-worker.js` — configuração PWA (instalável, com cache do app shell).
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
-- `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta — ver [Impressão de etiquetas](#impressão-de-etiquetas).
+- `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta e à laser do romaneio de Produção — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios).
 
 O backend serve o frontend estaticamente — em produção tudo roda em um único processo Node em uma única porta.
 
@@ -54,7 +54,7 @@ Uma caixa passa por três estados: **aberta → fechada → expedida**.
 
 1. **Salvar** (perfis Almoxarifado ou Expedição) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
 2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável de Almoxarifado/Expedição pode adicionar mais itens (inclusive de outro desses dois perfis — é uma tabela só, compartilhada). Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
-3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras — ver [Impressão de etiquetas](#impressão-de-etiquetas) para como ela sai fisicamente na impressora.
+3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios) para como ela sai fisicamente na impressora.
 4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_CAIXA_EMAIL_TO`.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
@@ -68,7 +68,7 @@ O perfil **Produção** monta seus próprios "romaneios" numa estrutura **totalm
 
 - **Sem etiqueta nem código de barras físico** — Produção não tem impressora Argox configurada, e o objetivo aqui é só gerar o romaneio em PDF. A tela de "Finalizar" não mostra preview de código de barras nem botão de imprimir; mostra direto um botão **"🧾 Gerar Romaneio"**.
 - **Numeração própria** — ao finalizar, o romaneio ganha um código sequencial próprio no formato `PROD-00001`, `PROD-00002`, ... (começando em 1, independente da numeração `CXxxxxxx` das caixas).
-- Fluxo igual ao de caixas fora isso: **Salvar** (aberto, sem código) → **Alterar** (mais itens, de um ou mais responsáveis) → **Finalizar** (gera o código `PROD-xxxxx`) → **Romaneio** (PDF + e-mail para `ROMANEIO_PRODUCAO_EMAIL_TO`).
+- Fluxo igual ao de caixas fora isso: **Salvar** (aberto, sem código) → **Alterar** (mais itens, de um ou mais responsáveis) → **Finalizar** (gera o código `PROD-xxxxx`) → **Romaneio** (PDF + e-mail para `ROMANEIO_PRODUCAO_EMAIL_TO` + impressão automática numa laser A4 — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios)).
 - Responsáveis próprios (`PRODUCAO_RESPONSAVEIS`, em `backend/constants.js`): **Diego Alves**, **Claudemir Miranda** e **Jânio Bauer**.
 - Como os romaneios de Produção não têm código de barras, eles **não** podem ser lidos/expandidos dentro de um "Novo Carregamento" (isso só funciona para caixas do Almoxarifado/Expedição).
 
@@ -83,16 +83,18 @@ O perfil **Em Campo** lista todos os carregamentos (com busca por número de pro
 
 Cada card na lista do perfil Em Campo mostra o status do desembarque: **Pendente** (ninguém salvou ainda), **Parcial** (salvo, mas faltou item) ou **Concluído** (salvo com tudo conferido).
 
-## Impressão de etiquetas
+## Impressão de etiquetas e romaneios
 
-As etiquetas de caixa (100mm × 70mm, com código de barras) saem direto nas impressoras térmicas **Argox OS-214 Plus** — uma dedicada ao perfil Almoxarifado, outra ao perfil Expedição — sem diálogo de impressão e sem depender do navegador do celular imprimir nada. O perfil Produção não usa etiqueta: seus romaneios (tabela própria, ver [Fluxo de romaneios de Produção](#fluxo-de-romaneios-de-produção)) não têm código de barras físico, então nem existe botão de imprimir pra ele.
+As etiquetas de caixa (100mm × 70mm, com código de barras) saem direto nas impressoras térmicas **Argox OS-214 Plus** — uma dedicada ao perfil Almoxarifado, outra ao perfil Expedição. O romaneio de Produção (papel A4) sai numa impressora a laser comum, **no mesmo computador** da Argox do Almoxarifado. Nenhum dos dois casos abre diálogo de impressão nem depende do navegador do celular imprimir nada.
 
-Como o backend fica hospedado numa VPS na nuvem e não tem acesso direto às impressoras (que estão na rede local da empresa, ligadas por USB a um computador sempre ligado), a impressão funciona em duas partes:
+Como o backend fica hospedado numa VPS na nuvem e não tem acesso direto às impressoras (que estão na rede local da empresa, ligadas por USB/rede a um computador sempre ligado), a impressão funciona em duas partes, iguais para os dois casos:
 
-1. **Servidor** — ao clicar em "🖨️ Imprimir Etiqueta" ou "🖨️ Reimprimir" (visível só para Almoxarifado e Expedição), o app chama `POST /api/etiquetas`, que gera o PDF da etiqueta (`backend/pdf/etiqueta.js`, com o código de barras via `bwip-js`) e grava um pedido pendente na tabela `etiqueta_fila`, associado à impressora daquele perfil (`IMPRESSORA_ALMOXARIFADO_NOME` / `IMPRESSORA_EXPEDICAO_NOME`).
-2. **Agente local** (`print-agent/`) — um script Node separado, rodando no computador ligado às impressoras (o "computador-ponte"), consulta `GET /api/etiquetas/pendentes` a cada poucos segundos, baixa o PDF pronto e manda pra impressora Argox correta usando `pdf-to-printer` (que já embute o SumatraPDF — não precisa instalar nada além do Node). Depois reporta sucesso/erro de volta pro servidor. Ver `print-agent/README.md` para instalação e configuração para iniciar junto com o Windows.
+1. **Servidor** — o app gera o PDF e grava um pedido pendente numa fila. Para etiqueta: ao clicar em "🖨️ Imprimir Etiqueta" ou "🖨️ Reimprimir" (visível só para Almoxarifado e Expedição), `POST /api/etiquetas` gera o PDF (`backend/pdf/etiqueta.js`, código de barras via `bwip-js`) e grava na tabela `etiqueta_fila`, associado à impressora daquele perfil (`IMPRESSORA_ALMOXARIFADO_NOME` / `IMPRESSORA_EXPEDICAO_NOME`). Para romaneio de Produção: toda vez que `POST /api/romaneios-producao/:id/romaneio` roda (e-mail + download), ele também grava automaticamente na tabela `romaneio_producao_impressao_fila`, usando a impressora de `IMPRESSORA_ROMANEIO_NOME` — não existe botão separado pra isso, é automático junto com o e-mail.
+2. **Agente local** (`print-agent/`) — um único script Node, rodando no computador-ponte, consulta **as duas filas** (`GET /api/etiquetas/pendentes` e `GET /api/romaneio-impressao/pendentes`) a cada poucos segundos, baixa o PDF pronto de cada uma e manda pra impressora correta usando `pdf-to-printer` (que já embute o SumatraPDF — não precisa instalar nada além do Node). A etiqueta imprime com `scale: "noscale"` + `orientation: "landscape"` (tamanho exato, sem reajuste); o romaneio imprime sem opções especiais, deixando o SumatraPDF ajustar ao papel A4 configurado no driver da laser. Depois reporta sucesso/erro de volta pro servidor. Ver `print-agent/README.md` para instalação e configuração para iniciar junto com o Windows.
 
-As rotas `/api/etiquetas/pendentes`, `/api/etiquetas/:id/pdf`, `/api/etiquetas/:id/concluido` e `/api/etiquetas/:id/erro` não usam o JWT dos perfis — são autenticadas por uma chave fixa (`AGENT_API_KEY`, header `X-Agent-Key`) compartilhada apenas entre o servidor e o agente local, já que ele não é uma pessoa logada no app.
+As rotas `/api/etiquetas/pendentes`, `/api/etiquetas/:id/pdf`, `/api/etiquetas/:id/concluido`, `/api/etiquetas/:id/erro` e as equivalentes em `/api/romaneio-impressao/*` não usam o JWT dos perfis — são autenticadas por uma chave fixa (`AGENT_API_KEY`, header `X-Agent-Key`) compartilhada apenas entre o servidor e o agente local, já que ele não é uma pessoa logada no app.
+
+Se `IMPRESSORA_ROMANEIO_NOME` não estiver configurado no servidor, o romaneio de Produção continua sendo gerado, baixado e enviado por e-mail normalmente — só a impressão automática fica pulada (com aviso no toast do app e no log do servidor).
 
 ## Painel Administrativo (`/admin`)
 
@@ -201,9 +203,9 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `PRODUCAO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_PRODUCAO_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `PRODUCAO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_PRODUCAO_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `IMPRESSORA_ROMANEIO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
-As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas — ver [Impressão de etiquetas](#impressão-de-etiquetas).
+As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas e do romaneio de Produção — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios).
 
 ## Atualizando um banco já existente
 
@@ -217,6 +219,7 @@ mysql -u root -p burntech_expedicao < alter_carregamentos_sequencial_projeto.sql
 mysql -u root -p burntech_expedicao < alter_carregamentos_perfil_expedicao_administrativo.sql  # ENUM criado_por_perfil aceita o novo perfil
 mysql -u root -p burntech_expedicao < alter_etiqueta_fila.sql  # fila de impressão de etiquetas (Argox)
 mysql -u root -p burntech_expedicao < alter_caixas_perfil_producao.sql  # cria romaneios_producao/romaneio_producao_itens (perfil Produção — tabela própria, não caixas)
+mysql -u root -p burntech_expedicao < alter_romaneio_producao_impressao.sql  # fila de impressão automática do romaneio de Produção (laser A4)
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

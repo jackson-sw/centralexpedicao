@@ -105,6 +105,33 @@ CREATE TABLE romaneios_producao (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Tabela: romaneio_producao_impressao_fila
+-- Fila de impressão automática do romaneio de Produção numa
+-- impressora a laser comum (papel A4) — não confundir com
+-- etiqueta_fila (etiqueta da caixa, Argox, 100x70mm). Roda no MESMO
+-- computador-ponte do perfil Almoxarifado (ver print-agent/), só que
+-- numa impressora diferente (IMPRESSORA_ROMANEIO_NOME). Um job é
+-- criado automaticamente toda vez que o romaneio é gerado (POST
+-- /api/romaneios-producao/:id/romaneio), junto com o envio por e-mail.
+-- ------------------------------------------------------------
+CREATE TABLE romaneio_producao_impressao_fila (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  romaneio_id  INT UNSIGNED NOT NULL,
+  impressora   VARCHAR(100) NOT NULL,
+  status       ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
+  erro_msg     VARCHAR(300) NULL,
+  criado_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  impresso_em  DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_romaneio_producao_impressao_fila_status (status),
+  KEY idx_romaneio_producao_impressao_fila_romaneio_id (romaneio_id),
+  CONSTRAINT fk_romaneio_producao_impressao_fila_romaneio
+    FOREIGN KEY (romaneio_id) REFERENCES romaneios_producao(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Tabela: romaneio_producao_itens
 -- Relação um-para-muitos: cada romaneio de Produção contém N itens,
 -- podendo vir de mais de um responsável enquanto estiver "aberto"

@@ -3,7 +3,7 @@ const db     = require('../db');
 const { auth, apenasProducao } = require('../middleware/auth');
 const { PRODUCAO_RESPONSAVEIS } = require('../constants');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
-const { gerarRomaneioPDF } = require('../pdf/romaneio');
+const { montarPdfRomaneioProducao } = require('../services/romaneioProducao');
 
 // Estrutura própria do perfil Produção — NÃO usa as tabelas
 // caixas/caixa_itens (essas continuam exclusivas de
@@ -251,25 +251,15 @@ router.post('/:id/finalizar', auth, apenasProducao, async (req, res) => {
 // existe rota de etiqueta/impressão pra Produção.
 router.post('/:id/romaneio', auth, apenasProducao, async (req, res) => {
   try {
-    const [[romaneio]] = await db.query('SELECT * FROM v_romaneios_producao_resumo WHERE id = ?', [req.params.id]);
-    if (!romaneio) return res.status(404).json({ erro: 'Romaneio não encontrado.' });
-    if (romaneio.status === 'aberto') {
+    const [[statusRow]] = await db.query('SELECT status FROM romaneios_producao WHERE id = ?', [req.params.id]);
+    if (!statusRow) return res.status(404).json({ erro: 'Romaneio não encontrado.' });
+    if (statusRow.status === 'aberto') {
       return res.status(400).json({ erro: 'Finalize o romaneio antes de gerar o PDF.' });
     }
 
-    const [itens] = await db.query(
-      'SELECT * FROM romaneio_producao_itens WHERE romaneio_id = ? ORDER BY ordem ASC, id ASC',
-      [romaneio.id]
-    );
-    const responsaveis = [...new Set(itens.map(i => i.responsavel_nome).filter(Boolean))];
-
-    const pdfBuffer = await gerarRomaneioPDF({
-      caixa: romaneio,
-      itens,
-      responsaveis,
-      titulo: 'ROMANEIO DE PRODUÇÃO',
-      rotuloResponsaveis: 'Responsável(is) que montaram o romaneio:',
-    });
+    const dados = await montarPdfRomaneioProducao(req.params.id);
+    if (!dados) return res.status(404).json({ erro: 'Romaneio não encontrado.' });
+    const { romaneio, responsaveis, pdfBuffer } = dados;
     const nomeArquivo = `romaneio-${romaneio.codigo || romaneio.id}.pdf`;
 
     let emailEnviado = false;
@@ -298,10 +288,36 @@ router.post('/:id/romaneio', auth, apenasProducao, async (req, res) => {
       console.warn('[POST /romaneios-producao/:id/romaneio] ROMANEIO_PRODUCAO_EMAIL_TO não configurado — e-mail não enviado.');
     }
 
+    // Impressão automática na laser (papel A4), no mesmo computador-ponte
+    // do perfil Almoxarifado (ver print-agent/) — só enfileira o pedido
+    // aqui; quem imprime de verdade é o agente local, que baixa o PDF de
+    // novo via GET /api/romaneio-impressao/:id/pdf (mesma lógica de
+    // montarPdfRomaneioProducao, não reaproveita este buffer).
+    let impressaoEnfileirada = false;
+    let impressaoErro = '';
+    const impressora = (process.env.IMPRESSORA_ROMANEIO_NOME || '').trim();
+    if (impressora) {
+      try {
+        await db.query(
+          `INSERT INTO romaneio_producao_impressao_fila (romaneio_id, impressora) VALUES (?, ?)`,
+          [romaneio.id, impressora]
+        );
+        impressaoEnfileirada = true;
+      } catch (filaErr) {
+        impressaoErro = sanitizarErroHeader(filaErr.message);
+        console.error('[POST /romaneios-producao/:id/romaneio] falha ao enfileirar impressão:', filaErr.message);
+      }
+    } else {
+      impressaoErro = 'IMPRESSORA_ROMANEIO_NOME nao configurado no servidor.';
+      console.warn('[POST /romaneios-producao/:id/romaneio] IMPRESSORA_ROMANEIO_NOME não configurado — impressão não enfileirada.');
+    }
+
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `inline; filename="${nomeArquivo}"`);
     res.set('X-Email-Enviado', emailEnviado ? 'true' : 'false');
     if (emailErro) res.set('X-Email-Erro', emailErro);
+    res.set('X-Impressao-Enfileirada', impressaoEnfileirada ? 'true' : 'false');
+    if (impressaoErro) res.set('X-Impressao-Erro', impressaoErro);
     res.send(pdfBuffer);
   } catch (err) {
     console.error('[POST /romaneios-producao/:id/romaneio]', err.message);

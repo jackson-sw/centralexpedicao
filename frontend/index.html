@@ -1694,8 +1694,14 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
       try { const data = await resp.json(); msg = data.erro || msg; } catch {}
       throw new Error(msg);
     }
-    const emailOk = resp.headers.get('X-Email-Enviado') === 'true';
+    // X-Email-Enviado existe em todos os romaneios; X-Impressao-Enfileirada
+    // só existe no romaneio de Produção (por enquanto) — por isso checa
+    // "!== null" em vez de assumir presente, senão trataria a ausência
+    // como falha de impressão nos outros tipos de romaneio.
+    const emailHeader = resp.headers.get('X-Email-Enviado');
     const emailErro = resp.headers.get('X-Email-Erro');
+    const impressaoHeader = resp.headers.get('X-Impressao-Enfileirada');
+    const impressaoErro = resp.headers.get('X-Impressao-Erro');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1705,12 +1711,18 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(
-      emailOk
-        ? 'Romaneio gerado e enviado por e-mail.'
-        : 'Romaneio gerado, mas o e-mail falhou' + (emailErro ? ': ' + emailErro : '.'),
-      !emailOk
-    );
+
+    const partes = [];
+    let houveFalha = false;
+    if (emailHeader !== null) {
+      if (emailHeader === 'true') partes.push('enviado por e-mail');
+      else { partes.push('o e-mail falhou' + (emailErro ? ': ' + emailErro : '')); houveFalha = true; }
+    }
+    if (impressaoHeader !== null) {
+      if (impressaoHeader === 'true') partes.push('enviado para impressão');
+      else { partes.push('a impressão falhou' + (impressaoErro ? ': ' + impressaoErro : '')); houveFalha = true; }
+    }
+    toast('Romaneio gerado' + (partes.length ? ', ' + partes.join(' e ') : '') + '.', houveFalha);
   } catch (e) {
     toast(e.message, true);
   } finally {

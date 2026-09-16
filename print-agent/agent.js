@@ -1,11 +1,14 @@
-// Agente local de impressão de etiquetas — Central Expedição
+// Agente local de impressão — Central Expedição
 //
-// Roda neste computador (o "computador-ponte"), ligado por USB às duas
-// impressoras Argox OS-214 Plus (uma do Almoxarifado, outra da Expedição).
-// O backend fica na nuvem e não enxerga essas impressoras diretamente —
-// por isso ele só ENFILEIRA os pedidos de etiqueta (tabela etiqueta_fila);
-// este agente é quem, de tempos em tempos, busca a fila, baixa o PDF já
-// pronto (100mm x 70mm, com código de barras) e manda pra impressora certa.
+// Roda neste computador (o "computador-ponte"), ligado por USB/rede às
+// impressoras físicas: as duas Argox OS-214 Plus (etiqueta de caixa,
+// uma do Almoxarifado, outra da Expedição) e a impressora a laser
+// (romaneio de Produção, papel A4) — todas no MESMO computador. O
+// backend fica na nuvem e não enxerga essas impressoras diretamente —
+// por isso ele só ENFILEIRA os pedidos (tabelas etiqueta_fila e
+// romaneio_producao_impressao_fila); este agente é quem, de tempos em
+// tempos, busca as duas filas, baixa o PDF já pronto e manda pra
+// impressora certa.
 //
 // Não precisa de print server nem de diálogo de impressão — usa o
 // pacote pdf-to-printer (que já vem com o SumatraPDF embutido) para
@@ -34,65 +37,84 @@ function log(...args) {
   console.log(`[${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]`, ...args);
 }
 
-async function buscarPendentes() {
-  const resp = await fetch(`${API_URL}/api/etiquetas/pendentes`, {
+// Duas filas independentes, consultadas no mesmo ciclo por este único
+// agente/computador — cada uma com seu próprio endpoint no backend e
+// suas próprias opções de impressão:
+// - etiqueta: etiqueta da caixa (100x70mm, Argox). Precisa de
+//   scale:"noscale" (a etiqueta já vem no tamanho exato, não deixa o
+//   SumatraPDF "encaixar" em outro papel) e orientation:"landscape"
+//   (o PDF é mais largo que alto).
+// - romaneio: romaneio de Produção (A4, impressora a laser comum) —
+//   sem opções especiais, deixa o SumatraPDF ajustar à página/papel
+//   padrão da impressora (o PDF já é gerado em A4).
+const FILAS = [
+  {
+    nome: 'etiqueta',
+    base: '/api/etiquetas',
+    printOptions: { scale: 'noscale', orientation: 'landscape' },
+    descricaoJob: (job) => `etiqueta #${job.id} (caixa ${job.caixa_id})`,
+  },
+  {
+    nome: 'romaneio',
+    base: '/api/romaneio-impressao',
+    printOptions: {},
+    descricaoJob: (job) => `romaneio #${job.id} (romaneio de produção ${job.romaneio_id})`,
+  },
+];
+
+async function buscarPendentes(base) {
+  const resp = await fetch(`${API_URL}${base}/pendentes`, {
     headers: { 'X-Agent-Key': AGENT_API_KEY },
   });
   if (!resp.ok) {
-    throw new Error(`GET /pendentes falhou: HTTP ${resp.status}`);
+    throw new Error(`GET ${base}/pendentes falhou: HTTP ${resp.status}`);
   }
   return resp.json();
 }
 
-async function baixarPdf(id) {
-  const resp = await fetch(`${API_URL}/api/etiquetas/${id}/pdf`, {
+async function baixarPdf(base, id, prefixoArquivo) {
+  const resp = await fetch(`${API_URL}${base}/${id}/pdf`, {
     headers: { 'X-Agent-Key': AGENT_API_KEY },
   });
   if (!resp.ok) {
-    throw new Error(`GET /${id}/pdf falhou: HTTP ${resp.status}`);
+    throw new Error(`GET ${base}/${id}/pdf falhou: HTTP ${resp.status}`);
   }
   const buf = Buffer.from(await resp.arrayBuffer());
-  const filePath = path.join(os.tmpdir(), `etiqueta-${id}.pdf`);
+  const filePath = path.join(os.tmpdir(), `${prefixoArquivo}-${id}.pdf`);
   fs.writeFileSync(filePath, buf);
   return filePath;
 }
 
-async function marcarConcluido(id) {
-  await fetch(`${API_URL}/api/etiquetas/${id}/concluido`, {
+async function marcarConcluido(base, id) {
+  await fetch(`${API_URL}${base}/${id}/concluido`, {
     method: 'POST',
     headers: { 'X-Agent-Key': AGENT_API_KEY },
   });
 }
 
-async function marcarErro(id, mensagem) {
-  await fetch(`${API_URL}/api/etiquetas/${id}/erro`, {
+async function marcarErro(base, id, mensagem) {
+  await fetch(`${API_URL}${base}/${id}/erro`, {
     method: 'POST',
     headers: { 'X-Agent-Key': AGENT_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ erro: String(mensagem).slice(0, 300) }),
   });
 }
 
-async function processarJob(job) {
-  log(`Imprimindo etiqueta #${job.id} (caixa ${job.caixa_id}) em "${job.impressora}"...`);
+async function processarJob(fila, job) {
+  log(`Imprimindo ${fila.descricaoJob(job)} em "${job.impressora}"...`);
   let filePath;
   try {
-    filePath = await baixarPdf(job.id);
-    // scale: "noscale" evita que o SumatraPDF tente "encaixar" o PDF de
-    // 100x70mm em outro tamanho de página — a etiqueta já vem no tamanho
-    // exato que a Argox espera. orientation: "landscape" é necessário
-    // porque o PDF é mais largo (100mm) do que alto (70mm) — sem isso,
-    // o driver da Argox assume retrato e gira/corta a etiqueta 90°.
+    filePath = await baixarPdf(fila.base, job.id, fila.nome);
     await print(filePath, {
       printer: job.impressora,
       silent: true,
-      scale: 'noscale',
-      orientation: 'landscape',
+      ...fila.printOptions,
     });
-    await marcarConcluido(job.id);
-    log(`Etiqueta #${job.id} impressa com sucesso.`);
+    await marcarConcluido(fila.base, job.id);
+    log(`${fila.nome} #${job.id} impresso(a) com sucesso.`);
   } catch (err) {
-    log(`ERRO ao imprimir etiqueta #${job.id}:`, err.message);
-    await marcarErro(job.id, err.message).catch(() => {});
+    log(`ERRO ao imprimir ${fila.nome} #${job.id}:`, err.message);
+    await marcarErro(fila.base, job.id, err.message).catch(() => {});
   } finally {
     if (filePath) fs.unlink(filePath, () => {});
   }
@@ -104,9 +126,11 @@ async function ciclo() {
   if (processando) return; // evita sobrepor ciclos se um job demorar mais que o intervalo
   processando = true;
   try {
-    const pendentes = await buscarPendentes();
-    for (const job of pendentes) {
-      await processarJob(job);
+    for (const fila of FILAS) {
+      const pendentes = await buscarPendentes(fila.base);
+      for (const job of pendentes) {
+        await processarJob(fila, job);
+      }
     }
   } catch (err) {
     log('ERRO ao consultar a fila:', err.message);
@@ -115,6 +139,6 @@ async function ciclo() {
   }
 }
 
-log(`Agente de impressão iniciado. Consultando ${API_URL} a cada ${POLL_INTERVAL_MS / 1000}s.`);
+log(`Agente de impressão iniciado. Consultando ${API_URL} a cada ${POLL_INTERVAL_MS / 1000}s (filas: ${FILAS.map((f) => f.nome).join(', ')}).`);
 ciclo();
 setInterval(ciclo, POLL_INTERVAL_MS);

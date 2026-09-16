@@ -1,39 +1,47 @@
-# Agente de impressão de etiquetas — Central Expedição
+# Agente de impressão — Central Expedição
 
 Programa que roda no "computador-ponte" (o computador sempre ligado, na
-mesma rede das impressoras Argox OS-214 Plus) e imprime automaticamente
-as etiquetas de caixa geradas pelo Central Expedição.
+mesma rede/USB das impressoras) e imprime automaticamente tanto as
+etiquetas de caixa quanto o romaneio de Produção gerados pelo Central
+Expedição.
 
 ## Como funciona
 
 O app (celular) não imprime diretamente — ele só avisa o servidor
-"imprima a etiqueta da caixa X". O servidor gera o PDF da etiqueta
-(100mm x 70mm, com código de barras) e guarda o pedido numa fila.
+"imprima a etiqueta da caixa X" ou "gere o romaneio Y". O servidor gera
+o PDF (etiqueta 100mm x 70mm com código de barras, ou romaneio A4) e
+guarda o pedido numa fila — uma fila pra cada tipo (`etiqueta_fila` e
+`romaneio_producao_impressao_fila`).
 
 Este agente, rodando aqui no computador-ponte, fica perguntando ao
-servidor "tem etiqueta pra imprimir?" a cada poucos segundos. Quando
-tem, ele baixa o PDF e manda direto pra impressora Argox certa —
-Almoxarifado ou Expedição, sem abrir nenhuma janela nem pedir
+servidor "tem algo pra imprimir?" a cada poucos segundos — consultando
+as DUAS filas no mesmo ciclo. Quando tem, ele baixa o PDF e manda
+direto pra impressora certa, sem abrir nenhuma janela nem pedir
 confirmação.
 
-Só existem duas impressoras configuradas: uma para o perfil
-Almoxarifado, outra para o perfil Expedição.
+Existem três impressoras configuradas, todas neste mesmo computador:
+
+- Uma Argox para o perfil Almoxarifado (etiqueta de caixa)
+- Uma Argox para o perfil Expedição (etiqueta de caixa)
+- Uma impressora a laser comum, papel A4 (romaneio de Produção)
 
 ## Pré-requisitos
 
 - Windows (o agente usa o SumatraPDF por baixo, que só funciona em Windows)
 - [Node.js](https://nodejs.org/) versão 18 ou mais recente instalado
-- As duas impressoras Argox instaladas no Windows deste computador, cada
-  uma com o nome exato configurado no servidor:
-  - `Argox-Almoxarifado`
-  - `Argox-expedicao`
+- As três impressoras instaladas no Windows deste computador, cada uma
+  com o nome exato configurado no servidor:
+  - `Argox-Almoxarifado` (etiqueta, Almoxarifado)
+  - `Argox-expedicao` (etiqueta, Expedição)
+  - a impressora a laser (romaneio de Produção) — nome definido em
+    `IMPRESSORA_ROMANEIO_NOME`, sem valor padrão fixo
 
   Para ver o nome exato de uma impressora, abra **Configurações →
   Bluetooth e dispositivos → Impressoras e scanners** e confira o nome
   como aparece lá (ou rode `wmic printer get name` num prompt de
   comando). Se os nomes não baterem exatamente com os de cima, avise
   para ajustar `IMPRESSORA_ALMOXARIFADO_NOME` / `IMPRESSORA_EXPEDICAO_NOME`
-  no `.env` do servidor.
+  / `IMPRESSORA_ROMANEIO_NOME` no `.env` do servidor.
 
 ## Instalação
 
@@ -57,10 +65,15 @@ Almoxarifado, outra para o perfil Expedição.
    npm start
    ```
 
-   Se aparecer `Agente de impressão iniciado. Consultando ... a cada 5s.`
-   e nenhum erro, está funcionando. Gere uma etiqueta pelo app (Nova
-   Caixa → Salvar → Finalizar, ou o botão "Reimprimir" no detalhe de
-   uma caixa) e confirme que ela sai na impressora certa.
+   Se aparecer `Agente de impressão iniciado. Consultando ... a cada 5s
+   (filas: etiqueta, romaneio).` e nenhum erro, está funcionando. Teste
+   os dois fluxos:
+   - **Etiqueta**: Nova Caixa → Salvar → Finalizar (ou o botão
+     "Reimprimir" no detalhe de uma caixa) e confirme que ela sai na
+     impressora Argox certa.
+   - **Romaneio de Produção**: finalize um romaneio no perfil Produção
+     e clique em "🧾 Gerar Romaneio" — confirme que ele sai na
+     impressora a laser, além de baixar o PDF e chegar por e-mail.
 
 ## Deixar rodando sempre (sem precisar abrir manualmente)
 
@@ -90,16 +103,21 @@ Tarefas já resolve bem para este caso.
 
 - **"API_URL não configurada" / "AGENT_API_KEY não configurada"** — o
   `.env` não foi criado ou está incompleto. Confira o passo 3 acima.
-- **Etiqueta não sai, mas o agente não mostra erro** — confira se
-  existem pedidos pendentes de fato (peça pro servidor confirmar via
-  `SELECT * FROM etiqueta_fila WHERE status='pendente'`) e se o
-  `AGENT_API_KEY` bate exatamente com o do servidor (chave errada dá
-  HTTP 401 nos logs do agente).
+- **Etiqueta/romaneio não sai, mas o agente não mostra erro** — confira
+  se existem pedidos pendentes de fato (peça pro servidor confirmar via
+  `SELECT * FROM etiqueta_fila WHERE status='pendente'` ou
+  `SELECT * FROM romaneio_producao_impressao_fila WHERE status='pendente'`,
+  conforme o caso) e se o `AGENT_API_KEY` bate exatamente com o do
+  servidor (chave errada dá HTTP 401 nos logs do agente).
 - **Erro ao imprimir mencionando o nome da impressora** — o nome
   configurado no servidor (`IMPRESSORA_ALMOXARIFADO_NOME` /
-  `IMPRESSORA_EXPEDICAO_NOME`) tem que ser idêntico, caractere por
-  caractere, ao nome da impressora no Windows.
+  `IMPRESSORA_EXPEDICAO_NOME` / `IMPRESSORA_ROMANEIO_NOME`) tem que ser
+  idêntico, caractere por caractere, ao nome da impressora no Windows.
 - **Etiqueta sai cortada ou em tamanho errado** — confirme que o driver
   da Argox está configurado para o tamanho de página 100mm x 70mm (o
   PDF já vem exatamente nesse tamanho; o agente imprime com
   `scale: "noscale"`, sem redimensionar).
+- **Romaneio sai cortado ou em papel errado** — confirme que o driver
+  da impressora a laser está configurado com A4 como tamanho de papel
+  padrão (o agente não força tamanho/orientação nesse job, deixa o
+  SumatraPDF ajustar ao papel configurado no driver).

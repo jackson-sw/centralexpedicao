@@ -8,6 +8,7 @@ const authRoutes             = require('./routes/auth');
 const carregamentosRoutes    = require('./routes/carregamentos');
 const caixasRoutes           = require('./routes/caixas');
 const romaneiosProducaoRoutes = require('./routes/romaneiosProducao');
+const romaneioImpressaoRoutes = require('./routes/romaneioImpressao');
 const itensMateriaisRoutes   = require('./routes/itensMateriais');
 const etiquetasRoutes        = require('./routes/etiquetas');
 const { verificarConexao } = require('./mail');
@@ -22,8 +23,9 @@ app.use(cors({
   // Permite que o frontend leia os cabeçalhos customizados que informam
   // se o e-mail do romaneio foi enviado com sucesso, e por quê não, quando
   // for o caso (ver POST /api/caixas/:id/romaneio, /api/romaneios-producao/:id/romaneio
-  // e /api/carregamentos/:id/romaneio).
-  exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro'],
+  // e /api/carregamentos/:id/romaneio), e se a impressão automática na
+  // laser foi enfileirada (só o romaneio de Produção, por enquanto).
+  exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro', 'X-Impressao-Enfileirada', 'X-Impressao-Erro'],
 }));
 app.use(express.json());
 
@@ -47,6 +49,7 @@ app.use('/api/auth',           authRoutes);
 app.use('/api/carregamentos',  carregamentosRoutes);
 app.use('/api/caixas',         caixasRoutes);
 app.use('/api/romaneios-producao', romaneiosProducaoRoutes);
+app.use('/api/romaneio-impressao', romaneioImpressaoRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);
 app.use('/api/etiquetas',      etiquetasRoutes);
 
