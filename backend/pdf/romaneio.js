@@ -55,9 +55,17 @@ function gerarRomaneioPDF({ caixa, itens, responsaveis, titulo, rotuloResponsave
     doc.font('Helvetica').text(fmtDT(caixa.fechado_em), 230, y);
     y += 17;
 
-    doc.font('Helvetica-Bold').text(rotuloResponsaveis, marginX, y);
-    doc.font('Helvetica').text(responsaveis.join(', ') || '—', 230, y, { width: contentRight - 230 });
-    y += Math.max(17, doc.heightOfString(responsaveis.join(', ') || '—', { width: contentRight - 230 }) + 5);
+    // O rótulo é parametrizável (caixa usa "...a caixa:", Produção usa
+    // "...o romaneio:", mais longo) — não dá pra supor que ele sempre
+    // cabe antes de x=230 como as outras linhas fixas abaixo. Mede a
+    // largura de verdade e só usa 230 como mínimo, senão o valor (nome
+    // do responsável) começa a ser desenhado em cima do fim do rótulo.
+    doc.font('Helvetica-Bold');
+    const rotuloWidth = doc.widthOfString(rotuloResponsaveis);
+    doc.text(rotuloResponsaveis, marginX, y);
+    const valorX = Math.max(230, marginX + rotuloWidth + 10);
+    doc.font('Helvetica').text(responsaveis.join(', ') || '—', valorX, y, { width: contentRight - valorX });
+    y += Math.max(17, doc.heightOfString(responsaveis.join(', ') || '—', { width: contentRight - valorX }) + 5);
 
     if (caixa.observacoes) {
       doc.font('Helvetica-Bold').text('Observações:', marginX, y);
