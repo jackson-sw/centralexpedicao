@@ -4,11 +4,12 @@ const cors      = require('cors');
 const rateLimit = require('express-rate-limit');
 const path      = require('path');
 
-const authRoutes           = require('./routes/auth');
-const carregamentosRoutes  = require('./routes/carregamentos');
-const caixasRoutes         = require('./routes/caixas');
-const itensMateriaisRoutes = require('./routes/itensMateriais');
-const etiquetasRoutes      = require('./routes/etiquetas');
+const authRoutes             = require('./routes/auth');
+const carregamentosRoutes    = require('./routes/carregamentos');
+const caixasRoutes           = require('./routes/caixas');
+const romaneiosProducaoRoutes = require('./routes/romaneiosProducao');
+const itensMateriaisRoutes   = require('./routes/itensMateriais');
+const etiquetasRoutes        = require('./routes/etiquetas');
 const { verificarConexao } = require('./mail');
 const { getPool: getPoolErp } = require('./dbErp');
 
@@ -20,7 +21,8 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   // Permite que o frontend leia os cabeçalhos customizados que informam
   // se o e-mail do romaneio foi enviado com sucesso, e por quê não, quando
-  // for o caso (ver POST /api/caixas/:id/romaneio e /api/carregamentos/:id/romaneio).
+  // for o caso (ver POST /api/caixas/:id/romaneio, /api/romaneios-producao/:id/romaneio
+  // e /api/carregamentos/:id/romaneio).
   exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro'],
 }));
 app.use(express.json());
@@ -44,6 +46,7 @@ app.use('/api/auth', rateLimit({
 app.use('/api/auth',           authRoutes);
 app.use('/api/carregamentos',  carregamentosRoutes);
 app.use('/api/caixas',         caixasRoutes);
+app.use('/api/romaneios-producao', romaneiosProducaoRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);
 app.use('/api/etiquetas',      etiquetasRoutes);
 

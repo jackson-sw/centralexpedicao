@@ -27,14 +27,25 @@ function apenasExpedicao(req, res, next) {
 
 // Bloqueio: quem pode montar/alterar/fechar caixas — Almoxarifado
 // (dono original da tela) e Expedição (que também monta caixa quando
-// precisa, direto do pátio, usando a mesma lógica/tela). NÃO inclui
-// Expedição Administrativo: esse perfil não tem impressora Argox
-// configurada (ver permiteImprimirEtiqueta no frontend e
-// IMPRESSORA_POR_PERFIL em backend/routes/etiquetas.js), então o botão
-// "Nova Caixa" nem aparece pra ele.
+// precisa, direto do pátio). NÃO inclui Expedição Administrativo: esse
+// perfil não tem impressora Argox configurada (ver
+// permiteImprimirEtiqueta no frontend e IMPRESSORA_POR_PERFIL em
+// backend/routes/etiquetas.js), então o botão "Nova Caixa" nem aparece
+// pra ele. Produção NÃO usa mais esta rota/tabela — tem sua própria
+// estrutura (romaneios_producao) e middleware (apenasProducao, abaixo).
 function apenasMontagemCaixa(req, res, next) {
   if (!['almoxarifado', 'expedicao'].includes(req.usuario?.perfil)) {
     return res.status(403).json({ erro: 'Acesso restrito aos perfis Almoxarifado e Expedição.' });
+  }
+  next();
+}
+
+// Bloqueio: só o perfil Produção pode montar/alterar/finalizar seus
+// romaneios (backend/routes/romaneiosProducao.js) — tabela e
+// numeração (PROD-00001, ...) próprias, sem etiqueta/impressora.
+function apenasProducao(req, res, next) {
+  if (req.usuario?.perfil !== 'producao') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Produção.' });
   }
   next();
 }
@@ -68,4 +79,4 @@ function apenasExpedicaoAdministrativo(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };
+module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasProducao, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };

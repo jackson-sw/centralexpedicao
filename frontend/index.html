@@ -73,6 +73,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .r-exp{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
 .r-campo{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;}
 .r-almox{background:#fef3c7;color:#92400e;border:1px solid #fde68a;}
+.r-prod{background:#dcfce7;color:#166534;border:1px solid #86efac;}
 .r-expadm{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;}
 .btn-sair{background:none;border:1px solid var(--border);border-radius:7px;padding:6px 13px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
 .btn-sair:hover{border-color:var(--red);color:var(--red);}
@@ -115,8 +116,8 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .cc-proj{font-size:15px;font-weight:800;font-family:monospace;letter-spacing:.2px;}
 .cc-sub{font-size:12px;color:var(--muted);margin-top:3px;}
 .cc-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f3e8ff;color:#7c3aed;white-space:nowrap;flex-shrink:0;}
-.cc-badge.aberta{background:#dbeafe;color:#1d4ed8;}
-.cc-badge.fechada{background:#fef3c7;color:#92400e;}
+.cc-badge.aberta,.cc-badge.aberto{background:#dbeafe;color:#1d4ed8;}
+.cc-badge.fechada,.cc-badge.fechado{background:#fef3c7;color:#92400e;}
 .cc-badge.expedida{background:#dcfce7;color:#166534;}
 .cc-badge.pendente{background:#f3f4f6;color:#6b7280;}
 .cc-badge.parcial{background:#fef3c7;color:#92400e;}
@@ -282,6 +283,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <div class="plabel">Almoxarifado</div>
         <div class="psub">Montagem de caixas</div>
       </div>
+      <div class="perfil" id="p-producao" onclick="selPerfil('producao')">
+        <div class="picon">⚙️</div>
+        <div class="plabel">Produção</div>
+        <div class="psub">Romaneio de produção</div>
+      </div>
       <div class="perfil" id="p-expedicao_administrativo" onclick="selPerfil('expedicao_administrativo')">
         <div class="picon">🗂️</div>
         <div class="plabel">Expedição Administrativo</div>
@@ -374,7 +380,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div class="stats-row">
         <div class="stat-card accent">
           <div class="stat-num" id="stat-almox-hoje">0</div>
-          <div class="stat-lbl">Caixas em aberto</div>
+          <div class="stat-lbl" id="lbl-almox-stat-aberto">Caixas em aberto</div>
         </div>
         <div class="stat-card">
           <div class="stat-num" id="stat-almox-total">0</div>
@@ -383,15 +389,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       </div>
 
       <div class="summary">
-        <span class="ptitle">Caixas</span>
-        <button class="btn btn-blue" onclick="abrirNovaCaixa()">+ Nova Caixa</button>
+        <span class="ptitle" id="ptitle-almox">Caixas</span>
+        <button class="btn btn-blue" id="btn-novo-item-almox" onclick="abrirNovaCaixa()">+ Nova Caixa</button>
       </div>
 
       <div id="lista-caixas-almox"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
     </div>
 
     <div class="fab-wrap">
-      <button class="fab" style="background:linear-gradient(145deg,#2563eb,#1d4ed8)" onclick="abrirNovaCaixa()" title="Nova Caixa" aria-label="Nova Caixa">+</button>
+      <button class="fab" id="fab-novo-item-almox" style="background:linear-gradient(145deg,#2563eb,#1d4ed8)" onclick="abrirNovaCaixa()" title="Nova Caixa" aria-label="Nova Caixa">+</button>
     </div>
   </div>
 
@@ -526,7 +532,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
   <div class="modal">
     <div class="mh">
       <div>
-        <div class="mt">🧰 Nova Caixa</div>
+        <div class="mt" id="mo-caixa-titulo">🧰 Nova Caixa</div>
         <div class="ms" id="cx-subtitulo">Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.</div>
       </div>
       <button class="mx" onclick="fecharNovaCaixa()">×</button>
@@ -539,6 +545,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
           <option>Kerllon Pereira</option>
           <option>Léo Neves</option>
           <option>Filipe Luchtenberg</option>
+		  <option>Diter Doering</option>
         </select>
       </div>
       <div class="fg"><label>Número do projeto</label><input id="cx-projeto" placeholder="Opcional — aparece na etiqueta impressa"></div>
@@ -562,22 +569,23 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
   <div class="modal" style="width:420px">
     <div class="mh">
       <div>
-        <div class="mt">✅ Caixa fechada com sucesso</div>
-        <div class="ms">Cole a etiqueta na caixa física</div>
+        <div class="mt" id="resultado-caixa-titulo">✅ Caixa fechada com sucesso</div>
+        <div class="ms" id="resultado-caixa-sub">Cole a etiqueta na caixa física</div>
       </div>
       <button class="mx" onclick="fecharResultadoCaixa()">×</button>
     </div>
     <div class="mb" style="text-align:center">
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px 12px;">
+      <div id="resultado-barcode-bloco" style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px 12px;">
         <div id="resultado-caixa-projeto" style="font-size:13px;font-weight:700;margin-bottom:8px"></div>
         <svg id="barcode-preview"></svg>
         <div class="print-label-code" id="barcode-preview-code"></div>
       </div>
-      <div style="font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.6">Escaneie este código durante o carregamento para adicionar todos os itens da caixa de uma vez.</div>
+      <div id="resultado-caixa-dica" style="font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.6">Escaneie este código durante o carregamento para adicionar todos os itens da caixa de uma vez.</div>
     </div>
     <div class="mf">
       <button class="btn btn-out" onclick="fecharResultadoCaixa()">Concluir</button>
       <button class="btn btn-blue" id="btn-imprimir-etiqueta-resultado" onclick="imprimirEtiquetaCaixa()">🖨️ Imprimir Etiqueta</button>
+      <button class="btn btn-blue" id="btn-gerar-romaneio-resultado" style="display:none" onclick="gerarRomaneioResultado()">🧾 Gerar Romaneio</button>
     </div>
   </div>
 </div>
@@ -604,7 +612,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
   <div class="modal">
     <div class="mh">
       <div>
-        <div class="mt">✏️ Alterar Caixa</div>
+        <div class="mt" id="mo-caixa-alterar-titulo">✏️ Alterar Caixa</div>
         <div class="ms" id="alt-sub">Confirme cada item novo pra salvar na hora, sem depender do botão final.</div>
       </div>
       <button class="mx" onclick="fecharAlterarCaixa()">×</button>
@@ -617,6 +625,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
           <option>Kerllon Pereira</option>
           <option>Léo Neves</option>
           <option>Filipe Luchtenberg</option>
+		  <option>Diter Doering</option>
         </select>
       </div>
 
@@ -658,6 +667,47 @@ let TOKEN  = localStorage.getItem('exp_token')  || null;
 let PERFIL = localStorage.getItem('exp_perfil') || null;
 let NOME   = localStorage.getItem('exp_nome')   || null;
 let SELECTED_PERFIL = null;
+
+// Espelha RESPONSAVEIS_POR_PERFIL do backend (backend/constants.js) —
+// se uma lista mudar lá, atualize aqui também. Usado para preencher
+// os <select> "Nome do responsável" de Nova Caixa e Alterar Caixa
+// (ver preencherOpcoesResponsavel) de acordo com quem está logado:
+// Expedição monta caixa com a mesma equipe do Almoxarifado; Produção
+// tem gente própria.
+const RESPONSAVEIS_POR_PERFIL = {
+  almoxarifado: ['Kerllon Pereira', 'Léo Neves', 'Filipe Luchtenberg', 'Diter Doering'],
+  expedicao:    ['Kerllon Pereira', 'Léo Neves', 'Filipe Luchtenberg', 'Diter Doering'],
+  producao:     ['Diego Alves', 'Claudemir Miranda', 'Jânio Bauer'],
+};
+
+// Reconstrói as <option> de um <select> de responsável com a lista do
+// perfil atualmente logado — chamado ao abrir "Nova Caixa" e "Alterar
+// Caixa" (os dois únicos formulários que pedem essa escolha).
+function preencherOpcoesResponsavel(selectId) {
+  const select = document.getElementById(selectId);
+  const nomes = RESPONSAVEIS_POR_PERFIL[PERFIL] || [];
+  select.innerHTML = '<option value="" disabled selected>Selecione...</option>'
+    + nomes.map((n) => `<option>${escapeHtml(n)}</option>`).join('');
+}
+
+// Produção tem sua PRÓPRIA estrutura no backend (romaneios_producao,
+// não caixas/caixa_itens — ver backend/routes/romaneiosProducao.js),
+// numeração própria (PROD-00001, ...) e não gera etiqueta. A tela
+// (modais "Nova Caixa"/"Alterar Caixa" etc.) continua compartilhada
+// com Almoxarifado por conveniência — estas duas funções decidem, em
+// tempo de execução, qual endpoint chamar e qual rótulo mostrar.
+function apiBaseCaixaAtual() {
+  return PERFIL === 'producao' ? '/romaneios-producao' : '/caixas';
+}
+function rotuloItemCaixaAtual() {
+  return PERFIL === 'producao' ? 'Romaneio' : 'Caixa';
+}
+// Código gerado ao finalizar — caixas usam "codigo_barras" (etiqueta
+// física), romaneios de Produção usam "codigo" (só identificação).
+function codigoDoItemCaixa(c) {
+  return (c && (c.codigo_barras || c.codigo)) || null;
+}
+
 let itensAtuais = [];
 let caixaItensAtuais = [];
 let scannerAtivo = null;
@@ -714,6 +764,7 @@ function selPerfil(p) {
   document.getElementById('p-expedicao').classList.toggle('on', p === 'expedicao');
   document.getElementById('p-em_campo').classList.toggle('on', p === 'em_campo');
   document.getElementById('p-almoxarifado').classList.toggle('on', p === 'almoxarifado');
+  document.getElementById('p-producao').classList.toggle('on', p === 'producao');
   document.getElementById('p-expedicao_administrativo').classList.toggle('on', p === 'expedicao_administrativo');
   document.getElementById('auth-pin').style.display = 'block';
   document.getElementById('login-err').textContent = '';
@@ -771,10 +822,23 @@ function boot() {
     carregarHistorico();
     carregarCaixas('lista-caixas');
     pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); }, 25000);
-  } else if (PERFIL === 'almoxarifado') {
-    roleEl.textContent = 'Almoxarifado';
-    roleEl.className = 'hrole r-almox';
+  } else if (PERFIL === 'almoxarifado' || PERFIL === 'producao') {
+    // Produção reaproveita a MESMA tela do Almoxarifado por
+    // conveniência (modais, listagem), mas fala com um backend
+    // totalmente separado (tabelas romaneios_producao, numeração
+    // PROD-00001, sem etiqueta — ver apiBaseCaixaAtual/
+    // rotuloItemCaixaAtual e backend/routes/romaneiosProducao.js).
+    const ehProducao = PERFIL === 'producao';
+    roleEl.textContent = ehProducao ? 'Produção' : 'Almoxarifado';
+    roleEl.className = ehProducao ? 'hrole r-prod' : 'hrole r-almox';
     document.getElementById('view-almoxarifado').style.display = 'block';
+    if (ehProducao) {
+      document.getElementById('lbl-almox-stat-aberto').textContent = 'Romaneios em aberto';
+      document.getElementById('ptitle-almox').textContent = 'Romaneios';
+      document.getElementById('btn-novo-item-almox').textContent = '+ Novo Romaneio';
+      document.getElementById('fab-novo-item-almox').title = 'Novo Romaneio';
+      document.getElementById('fab-novo-item-almox').setAttribute('aria-label', 'Novo Romaneio');
+    }
     carregarCaixas('lista-caixas-almox');
     pollTimer = setInterval(() => carregarCaixas('lista-caixas-almox'), 25000);
   } else if (PERFIL === 'expedicao_administrativo') {
@@ -1127,14 +1191,14 @@ async function abrirScannerDesembarque() {
 // Expedição (somente leitura) quanto a tela do perfil Almoxarifado.
 async function carregarCaixas(targetId = 'lista-caixas') {
   try {
-    const lista = await api('GET', '/caixas');
+    const lista = await api('GET', apiBaseCaixaAtual());
     caixasCache = lista;
     renderCaixas(lista, targetId);
 
     const elHoje = document.getElementById('stat-almox-hoje');
     const elTotal = document.getElementById('stat-almox-total');
     if (elHoje && elTotal) {
-      elHoje.textContent = lista.filter(c => c.status === 'aberta').length;
+      elHoje.textContent = lista.filter(c => c.status === 'aberta' || c.status === 'aberto').length;
       elTotal.textContent = lista.length;
     }
   } catch (e) {
@@ -1147,15 +1211,18 @@ async function carregarCaixas(targetId = 'lista-caixas') {
 
 function renderCaixas(lista, targetId = 'lista-caixas') {
   const el = document.getElementById(targetId);
+  const rotulo = rotuloItemCaixaAtual();
   if (!lista.length) {
-    el.innerHTML = `<div class="empty-box"><div class="empty-icon">🧰</div><div class="empty-title">Nenhuma caixa registrada</div><div class="empty-sub">Toque em "Nova Caixa" para montar a primeira.</div></div>`;
+    el.innerHTML = rotulo === 'Romaneio'
+      ? `<div class="empty-box"><div class="empty-icon">🧾</div><div class="empty-title">Nenhum romaneio registrado</div><div class="empty-sub">Toque em "Novo Romaneio" para montar o primeiro.</div></div>`
+      : `<div class="empty-box"><div class="empty-icon">🧰</div><div class="empty-title">Nenhuma caixa registrada</div><div class="empty-sub">Toque em "Nova Caixa" para montar a primeira.</div></div>`;
     return;
   }
   el.innerHTML = lista.map(c => `
     <div class="ccard caixa" onclick="verDetalheCaixa(${c.id})">
       <div class="cc-top">
         <div>
-          <div class="cc-proj">${escapeHtml(c.codigo_barras || ('Caixa #' + c.id))}</div>
+          <div class="cc-proj">${escapeHtml(codigoDoItemCaixa(c) || (rotulo + ' #' + c.id))}</div>
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
         <span class="cc-badge ${c.status}">${labelStatusCaixa(c.status)}</span>
@@ -1169,16 +1236,17 @@ function renderCaixas(lista, targetId = 'lista-caixas') {
 }
 
 function labelStatusCaixa(status) {
-  if (status === 'aberta')   return 'Aberta';
+  if (status === 'aberta' || status === 'aberto')   return PERFIL === 'producao' ? 'Aberto' : 'Aberta';
   if (status === 'expedida') return 'Expedida';
-  return 'Fechada';
+  return PERFIL === 'producao' ? 'Fechado' : 'Fechada';
 }
 
 async function verDetalheCaixa(id) {
   try {
-    const c = await api('GET', '/caixas/' + id);
-    document.getElementById('det2-titulo').textContent = c.codigo_barras || ('Caixa #' + c.id);
-    document.getElementById('det2-sub').textContent = labelStatusCaixa(c.status) + ' · aberta em ' + fmtDT(c.criado_em) +
+    const c = await api('GET', apiBaseCaixaAtual() + '/' + id);
+    const rotulo = rotuloItemCaixaAtual();
+    document.getElementById('det2-titulo').textContent = codigoDoItemCaixa(c) || (rotulo + ' #' + c.id);
+    document.getElementById('det2-sub').textContent = labelStatusCaixa(c.status) + (PERFIL === 'producao' ? ' · aberto em ' : ' · aberta em ') + fmtDT(c.criado_em) +
       (c.fechado_em ? ' · finalizada em ' + fmtDT(c.fechado_em) : '');
     document.getElementById('det2-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
@@ -1205,14 +1273,15 @@ async function verDetalheCaixa(id) {
 function renderFooterCaixaDetalhe(c) {
   const footer = document.getElementById('det2-footer');
   let botoes = '';
-  // Alterar/Finalizar uma caixa aberta: Almoxarifado (tela original) e
+  // Alterar/Finalizar uma caixa aberta: Almoxarifado (tela original),
   // Expedição (que agora também monta caixa, ver btn-nova-caixa-exp em
-  // boot() e apenasMontagemCaixa no backend).
-  if ((PERFIL === 'almoxarifado' || PERFIL === 'expedicao') && c.status === 'aberta') {
+  // boot() e apenasMontagemCaixa no backend) e Produção (mesma tela do
+  // Almoxarifado).
+  if ((PERFIL === 'almoxarifado' || PERFIL === 'expedicao' || PERFIL === 'producao') && (c.status === 'aberta' || c.status === 'aberto')) {
     botoes += `<button class="btn btn-out" onclick="abrirAlterarCaixa(${c.id})">✏️ Alterar</button>`;
     botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
   }
-  if (c.status !== 'aberta') {
+  if (c.status !== 'aberta' && c.status !== 'aberto') {
     // Só Almoxarifado e Expedição têm impressora Argox configurada
     // (ver permiteImprimirEtiqueta) — os demais perfis só veem Romaneio.
     if (permiteImprimirEtiqueta()) {
@@ -1234,17 +1303,26 @@ let caixaEmCriacaoId = null;
 // btn-nova-caixa-exp) usa a aba "Caixas" do histórico compartilhado
 // (lista-caixas).
 function idListaCaixasAtual() {
-  return PERFIL === 'almoxarifado' ? 'lista-caixas-almox' : 'lista-caixas';
+  return (PERFIL === 'almoxarifado' || PERFIL === 'producao') ? 'lista-caixas-almox' : 'lista-caixas';
 }
 
 function abrirNovaCaixa() {
-  document.getElementById('cx-responsavel').value = '';
+  preencherOpcoesResponsavel('cx-responsavel');
   document.getElementById('cx-responsavel').disabled = false;
   document.getElementById('cx-projeto').value = '';
   document.getElementById('cx-projeto').disabled = false;
   document.getElementById('cx-obs').value = '';
   document.getElementById('cx-obs').disabled = false;
-  document.getElementById('cx-subtitulo').textContent = 'Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
+  // Produção tem seu próprio texto/título aqui pra não confundir (mesma
+  // tela do Almoxarifado, ver boot()) — os demais perfis mantêm o texto
+  // original. Sem "etiqueta impressa" no placeholder do projeto porque
+  // Produção não gera etiqueta (só romaneio).
+  const ehProducao = PERFIL === 'producao';
+  document.getElementById('mo-caixa-titulo').textContent = ehProducao ? '🧾 Novo Romaneio' : '🧰 Nova Caixa';
+  document.getElementById('cx-projeto').placeholder = ehProducao ? 'Opcional' : 'Opcional — aparece na etiqueta impressa';
+  document.getElementById('cx-subtitulo').textContent = ehProducao
+    ? 'Produção → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.'
+    : 'Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
   document.getElementById('btn-cancelar-caixa').textContent = 'Cancelar';
   caixaEmCriacaoId = null;
   caixaItensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
@@ -1343,7 +1421,7 @@ async function confirmarItemCaixa(idx) {
       if (!caixaEmCriacaoId) {
         const numero_projeto = document.getElementById('cx-projeto').value.trim();
         const observacoes = document.getElementById('cx-obs').value.trim();
-        const data = await api('POST', '/caixas', {
+        const data = await api('POST', apiBaseCaixaAtual(), {
           responsavel_nome, numero_projeto: numero_projeto || null, observacoes: observacoes || null,
           itens: [{ codigo_item, descricao, quantidade }],
         });
@@ -1351,13 +1429,13 @@ async function confirmarItemCaixa(idx) {
         it.id = data.itens_ids[0];
         travarCabecalhoCaixa();
       } else {
-        const data = await api('POST', `/caixas/${caixaEmCriacaoId}/itens`, {
+        const data = await api('POST', `${apiBaseCaixaAtual()}/${caixaEmCriacaoId}/itens`, {
           responsavel_nome, itens: [{ codigo_item, descricao, quantidade }],
         });
         it.id = data.itens_ids[0];
       }
     } else {
-      await api('PUT', `/caixas/${caixaEmCriacaoId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+      await api('PUT', `${apiBaseCaixaAtual()}/${caixaEmCriacaoId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
     }
     it.salvo = true;
     if (idx === caixaItensAtuais.length - 1) {
@@ -1417,11 +1495,13 @@ let novosItensAlterar = [];
 
 async function abrirAlterarCaixa(id) {
   try {
-    const c = await api('GET', '/caixas/' + id);
+    const c = await api('GET', apiBaseCaixaAtual() + '/' + id);
+    const rotulo = rotuloItemCaixaAtual();
     alterandoCaixaId = id;
+    document.getElementById('mo-caixa-alterar-titulo').textContent = rotulo === 'Romaneio' ? '✏️ Alterar Romaneio' : '✏️ Alterar Caixa';
     document.getElementById('alt-sub').textContent =
-      (c.codigo_barras || ('Caixa #' + c.id)) + ' — confirme cada item novo pra salvar na hora.';
-    document.getElementById('alt-responsavel').value = '';
+      (codigoDoItemCaixa(c) || (rotulo + ' #' + c.id)) + ' — confirme cada item novo pra salvar na hora.';
+    preencherOpcoesResponsavel('alt-responsavel');
     document.getElementById('alt-responsavel').disabled = false;
     document.getElementById('btn-cancelar-alterar').textContent = 'Cancelar';
     document.getElementById('alt-itens-existentes').innerHTML = `
@@ -1521,14 +1601,14 @@ async function confirmarItemAlterar(idx) {
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
     if (!it.id) {
-      const data = await api('POST', `/caixas/${alterandoCaixaId}/itens`, {
+      const data = await api('POST', `${apiBaseCaixaAtual()}/${alterandoCaixaId}/itens`, {
         responsavel_nome, itens: [{ codigo_item, descricao, quantidade }],
       });
       it.id = data.itens_ids[0];
       document.getElementById('alt-responsavel').disabled = true;
       document.getElementById('btn-cancelar-alterar').textContent = 'Fechar';
     } else {
-      await api('PUT', `/caixas/${alterandoCaixaId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+      await api('PUT', `${apiBaseCaixaAtual()}/${alterandoCaixaId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
     }
     it.salvo = true;
     if (idx === novosItensAlterar.length - 1) {
@@ -1574,12 +1654,13 @@ function fecharAlterarCaixa() {
 
 // ── FINALIZAR CAIXA ────────────────────────────────────
 async function finalizarCaixa(id) {
-  if (!confirm('Finalizar esta caixa? Depois de finalizada não será mais possível adicionar itens.')) return;
+  const rotulo = rotuloItemCaixaAtual();
+  if (!confirm(`Finalizar ${rotulo === 'Romaneio' ? 'este romaneio' : 'esta caixa'}? Depois de finalizada não será mais possível adicionar itens.`)) return;
   try {
-    const data = await api('POST', `/caixas/${id}/finalizar`, {});
+    const data = await api('POST', `${apiBaseCaixaAtual()}/${id}/finalizar`, {});
     fecharModal('mo-caixa-detalhe');
     ultimaCaixaGerada = data;
-    mostrarResultadoCaixa(data.codigo_barras);
+    mostrarResultadoCaixa(codigoDoItemCaixa(data));
     carregarCaixas(idListaCaixasAtual());
   } catch (e) {
     toast(e.message, true);
@@ -1588,8 +1669,8 @@ async function finalizarCaixa(id) {
 
 // ── ROMANEIO (PDF) ─────────────────────────────────────
 // Não usa o helper api() porque a resposta é um PDF binário, não JSON.
-async function gerarRomaneio(id) {
-  await baixarRomaneio(`/caixas/${id}/romaneio`, `btn-romaneio-${id}`, `romaneio-caixa-${id}.pdf`);
+async function gerarRomaneio(id, btnId) {
+  await baixarRomaneio(`${apiBaseCaixaAtual()}/${id}/romaneio`, btnId || `btn-romaneio-${id}`, `romaneio-${id}.pdf`);
 }
 
 async function gerarRomaneioCarregamento(id) {
@@ -1638,16 +1719,39 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
 }
 
 function mostrarResultadoCaixa(codigo) {
-  document.getElementById('barcode-preview-code').textContent = codigo;
-  const projetoEl = document.getElementById('resultado-caixa-projeto');
-  const projeto = ultimaCaixaGerada && ultimaCaixaGerada.numero_projeto;
-  if (projetoEl) {
-    projetoEl.textContent = projeto ? ('Projeto: ' + projeto) : '';
-    projetoEl.style.display = projeto ? '' : 'none';
+  const ehProducao = PERFIL === 'producao';
+
+  // Produção não tem etiqueta/código de barras físico — só o número do
+  // romaneio (PROD-00001) e um botão pra gerar o PDF na hora, sem
+  // depender do detalhe. Almoxarifado/Expedição mantêm o fluxo original
+  // (preview do código de barras + Imprimir Etiqueta).
+  document.getElementById('resultado-caixa-titulo').textContent = ehProducao
+    ? '✅ Romaneio finalizado com sucesso'
+    : '✅ Caixa fechada com sucesso';
+  document.getElementById('resultado-caixa-sub').textContent = ehProducao
+    ? codigo
+    : 'Cole a etiqueta na caixa física';
+  document.getElementById('resultado-barcode-bloco').style.display = ehProducao ? 'none' : '';
+  document.getElementById('resultado-caixa-dica').style.display = ehProducao ? 'none' : '';
+
+  if (!ehProducao) {
+    document.getElementById('barcode-preview-code').textContent = codigo;
+    const projetoEl = document.getElementById('resultado-caixa-projeto');
+    const projeto = ultimaCaixaGerada && ultimaCaixaGerada.numero_projeto;
+    if (projetoEl) {
+      projetoEl.textContent = projeto ? ('Projeto: ' + projeto) : '';
+      projetoEl.style.display = projeto ? '' : 'none';
+    }
+    try {
+      JsBarcode('#barcode-preview', codigo, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 6 });
+    } catch (e) { console.warn('Falha ao gerar código de barras', e); }
   }
-  try {
-    JsBarcode('#barcode-preview', codigo, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 6 });
-  } catch (e) { console.warn('Falha ao gerar código de barras', e); }
+
+  // Produção não tem impressora Argox configurada (ver
+  // permiteImprimirEtiqueta) — em vez do botão de imprimir, mostra
+  // direto o de gerar romaneio.
+  document.getElementById('btn-imprimir-etiqueta-resultado').style.display = (!ehProducao && permiteImprimirEtiqueta()) ? '' : 'none';
+  document.getElementById('btn-gerar-romaneio-resultado').style.display = ehProducao ? '' : 'none';
   abrirModal('mo-caixa-resultado');
 }
 
@@ -1655,8 +1759,16 @@ function fecharResultadoCaixa() {
   fecharModal('mo-caixa-resultado');
 }
 
+// Gera/baixa o romaneio em PDF direto da tela de sucesso do "Finalizar"
+// (só Produção vê este botão — ver mostrarResultadoCaixa).
+async function gerarRomaneioResultado() {
+  if (!ultimaCaixaGerada) return;
+  await gerarRomaneio(ultimaCaixaGerada.id, 'btn-gerar-romaneio-resultado');
+}
+
 // Só Almoxarifado e Expedição têm impressora Argox configurada no
-// servidor (ver backend/routes/etiquetas.js) — os outros perfis nem
+// servidor (ver backend/routes/etiquetas.js) — os outros perfis
+// (Em Campo, Expedição Administrativo e, por enquanto, Produção) nem
 // veem o botão de imprimir/reimprimir etiqueta.
 function permiteImprimirEtiqueta() {
   return PERFIL === 'almoxarifado' || PERFIL === 'expedicao';

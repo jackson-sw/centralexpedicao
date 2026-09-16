@@ -76,6 +76,59 @@ CREATE TABLE caixas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Tabela: romaneios_producao
+-- Perfil Produção tem sua PRÓPRIA estrutura, separada de
+-- caixas/caixa_itens (não compartilha sequência nem tabela com
+-- Almoxarifado/Expedição). Objetivo aqui é só gerar romaneio — não
+-- existe etiqueta/código de barras físico nem impressora configurada
+-- pra este perfil, então "codigo" é só um número de identificação
+-- (não precisa ser escaneável). Fluxo igual ao de caixas: nasce
+-- "aberto" e pode receber itens de mais de um responsável até ser
+-- finalizado ("fechado"), quando ganha o código sequencial próprio.
+-- ------------------------------------------------------------
+CREATE TABLE romaneios_producao (
+  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  -- Gerado em POST /:id/finalizar como 'PROD-' + id com 5 dígitos
+  -- (ex.: PROD-00001) — sequência própria, começando em 1, independente
+  -- da numeração de caixas.
+  codigo            VARCHAR(20)  NULL,
+  status            ENUM('aberto', 'fechado') NOT NULL DEFAULT 'aberto',
+  responsavel_nome  VARCHAR(150) NOT NULL,
+  numero_projeto    VARCHAR(50)  NULL,
+  observacoes       VARCHAR(500) NULL,
+  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fechado_em        DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_romaneios_producao_codigo (codigo),
+  KEY idx_romaneios_producao_status (status),
+  KEY idx_romaneios_producao_criado_em (criado_em)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Tabela: romaneio_producao_itens
+-- Relação um-para-muitos: cada romaneio de Produção contém N itens,
+-- podendo vir de mais de um responsável enquanto estiver "aberto"
+-- (mesmo padrão de caixa_itens).
+-- ------------------------------------------------------------
+CREATE TABLE romaneio_producao_itens (
+  id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  romaneio_id      INT UNSIGNED NOT NULL,
+  codigo_item      VARCHAR(100) NOT NULL,
+  descricao        VARCHAR(255) NOT NULL,
+  quantidade       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+  responsavel_nome VARCHAR(150) NOT NULL,
+  ordem            SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  criado_em        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_romaneio_producao_itens_romaneio_id (romaneio_id),
+  KEY idx_romaneio_producao_itens_codigo_item (codigo_item),
+  CONSTRAINT fk_romaneio_producao_itens_romaneio
+    FOREIGN KEY (romaneio_id) REFERENCES romaneios_producao(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Tabela: etiqueta_fila
 -- Fila de impressão física da etiqueta da caixa (impressoras Argox,
 -- uma por perfil — Almoxarifado e Expedição). O app só enfileira
@@ -187,6 +240,27 @@ SELECT
 FROM caixas c
 LEFT JOIN caixa_itens ci ON ci.caixa_id = c.id
 GROUP BY c.id;
+
+-- ------------------------------------------------------------
+-- View: v_romaneios_producao_resumo
+-- Lista de romaneios de Produção com contagem de itens e quantidade
+-- total (mesmo papel de v_caixas_resumo, tabela própria).
+-- ------------------------------------------------------------
+CREATE OR REPLACE VIEW v_romaneios_producao_resumo AS
+SELECT
+  r.id,
+  r.codigo,
+  r.status,
+  r.responsavel_nome,
+  r.numero_projeto,
+  r.observacoes,
+  r.criado_em,
+  r.fechado_em,
+  COUNT(ri.id)                    AS total_itens,
+  COALESCE(SUM(ri.quantidade), 0) AS quantidade_total
+FROM romaneios_producao r
+LEFT JOIN romaneio_producao_itens ri ON ri.romaneio_id = r.id
+GROUP BY r.id;
 
 -- ------------------------------------------------------------
 -- View: v_carregamentos_resumo

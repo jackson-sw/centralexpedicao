@@ -25,9 +25,16 @@ function fmtQtd(q) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-// Gera o PDF do romaneio de uma caixa já finalizada e resolve com um Buffer.
-// { caixa: linha de v_caixas_resumo, itens: linhas de caixa_itens, responsaveis: string[] }
-function gerarRomaneioPDF({ caixa, itens, responsaveis }) {
+// Gera o PDF do romaneio de uma caixa (ou romaneio de Produção) já
+// finalizada e resolve com um Buffer.
+// { caixa: linha de v_caixas_resumo (ou v_romaneios_producao_resumo),
+//   itens, responsaveis: string[], titulo, rotuloResponsaveis }
+// titulo/rotuloResponsaveis são opcionais — usados por
+// backend/routes/romaneiosProducao.js pra trocar "CAIXA"/"a caixa" por
+// "PRODUÇÃO"/"o romaneio" sem duplicar todo este arquivo.
+function gerarRomaneioPDF({ caixa, itens, responsaveis, titulo, rotuloResponsaveis }) {
+  titulo = titulo || 'ROMANEIO DE CAIXA';
+  rotuloResponsaveis = rotuloResponsaveis || 'Responsável(is) que montaram a caixa:';
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
     const chunks = [];
@@ -39,7 +46,7 @@ function gerarRomaneioPDF({ caixa, itens, responsaveis }) {
     const marginX    = 40;
     const contentRight = pageWidth - marginX;
 
-    desenharCabecalho(doc, pageWidth, caixa);
+    desenharCabecalho(doc, pageWidth, caixa, titulo);
 
     let y = 132;
 
@@ -48,7 +55,7 @@ function gerarRomaneioPDF({ caixa, itens, responsaveis }) {
     doc.font('Helvetica').text(fmtDT(caixa.fechado_em), 230, y);
     y += 17;
 
-    doc.font('Helvetica-Bold').text('Responsável(is) que montaram a caixa:', marginX, y);
+    doc.font('Helvetica-Bold').text(rotuloResponsaveis, marginX, y);
     doc.font('Helvetica').text(responsaveis.join(', ') || '—', 230, y, { width: contentRight - 230 });
     y += Math.max(17, doc.heightOfString(responsaveis.join(', ') || '—', { width: contentRight - 230 }) + 5);
 
@@ -73,7 +80,7 @@ function gerarRomaneioPDF({ caixa, itens, responsaveis }) {
   });
 }
 
-function desenharCabecalho(doc, pageWidth, caixa) {
+function desenharCabecalho(doc, pageWidth, caixa, titulo) {
   doc.rect(0, 0, pageWidth, 100).fill(RED);
 
   // Monograma (mesmo estilo do ícone do app: quadrado arredondado vermelho)
@@ -86,9 +93,9 @@ function desenharCabecalho(doc, pageWidth, caixa) {
     .text('Central Expedição · Agrolândia, SC', 98, 56);
 
   doc.font('Helvetica-Bold').fontSize(13)
-    .text('ROMANEIO DE CAIXA', 0, 34, { width: pageWidth - 40, align: 'right' });
+    .text(titulo, 0, 34, { width: pageWidth - 40, align: 'right' });
   doc.font('Helvetica').fontSize(11)
-    .text(caixa.codigo_barras || ('Caixa #' + caixa.id), 0, 56, { width: pageWidth - 40, align: 'right' });
+    .text(caixa.codigo_barras || caixa.codigo || ('#' + caixa.id), 0, 56, { width: pageWidth - 40, align: 'right' });
 }
 
 function desenharTabelaItens(doc, { marginX, contentRight, y, itens }) {

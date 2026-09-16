@@ -7,6 +7,7 @@ const NOMES_PERFIL = {
   em_campo:                 'Em Campo',
   almoxarifado:             'Almoxarifado',
   expedicao_administrativo: 'Expedição Administrativo',
+  producao:                 'Produção',
 };
 
 const HASH_ENV = {
@@ -14,9 +15,10 @@ const HASH_ENV = {
   em_campo:                 'EM_CAMPO_PASSWORD_HASH',
   almoxarifado:             'ALMOXARIFADO_PASSWORD_HASH',
   expedicao_administrativo: 'EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH',
+  producao:                 'PRODUCAO_PASSWORD_HASH',
 };
 
-// POST /api/auth/login — { perfil: 'expedicao' | 'em_campo' | 'almoxarifado' | 'expedicao_administrativo', senha }
+// POST /api/auth/login — { perfil: 'expedicao' | 'em_campo' | 'almoxarifado' | 'expedicao_administrativo' | 'producao', senha }
 router.post('/login', async (req, res) => {
   try {
     const { perfil, senha } = req.body;

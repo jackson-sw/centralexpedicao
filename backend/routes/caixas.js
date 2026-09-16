@@ -1,12 +1,20 @@
 const router = require('express').Router();
 const db     = require('../db');
 const { auth, apenasMontagemCaixa } = require('../middleware/auth');
-const { ALMOXARIFADO_RESPONSAVEIS } = require('../constants');
+const { RESPONSAVEIS_POR_PERFIL } = require('../constants');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioPDF } = require('../pdf/romaneio');
 
-function responsavelValido(nome) {
-  return typeof nome === 'string' && ALMOXARIFADO_RESPONSAVEIS.includes(nome.trim());
+// Almoxarifado e Expedição compartilham a mesma lista fixa de nomes
+// (ver RESPONSAVEIS_POR_PERFIL em constants.js) — valida contra a
+// lista de quem está logado agora, não de quem abriu a caixa
+// originalmente (uma caixa pode receber itens de responsáveis
+// diferentes ao longo do tempo, inclusive de outro perfil, ver rota
+// POST /:id/itens). Produção tem tabela própria — ver
+// backend/routes/romaneiosProducao.js.
+function responsavelValido(nome, perfil) {
+  const lista = RESPONSAVEIS_POR_PERFIL[perfil] || [];
+  return typeof nome === 'string' && lista.includes(nome.trim());
 }
 
 // GET /api/caixas — histórico (mais recentes primeiro)
@@ -85,8 +93,8 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { responsavel_nome, numero_projeto, observacoes, itens } = req.body;
 
-    if (!responsavelValido(responsavel_nome)) {
-      return res.status(400).json({ erro: 'Selecione um responsável válido do Almoxarifado.' });
+    if (!responsavelValido(responsavel_nome, req.usuario.perfil)) {
+      return res.status(400).json({ erro: 'Selecione um responsável válido.' });
     }
     if (!Array.isArray(itens) || itens.length === 0) {
       return res.status(400).json({ erro: 'Inclua ao menos um item na caixa.' });
@@ -143,7 +151,7 @@ router.post('/:id/itens', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { responsavel_nome, itens } = req.body;
 
-    if (!responsavelValido(responsavel_nome)) {
+    if (!responsavelValido(responsavel_nome, req.usuario.perfil)) {
       return res.status(400).json({ erro: 'Selecione o responsável que está adicionando os itens.' });
     }
     if (!Array.isArray(itens) || itens.length === 0) {

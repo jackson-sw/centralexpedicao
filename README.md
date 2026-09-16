@@ -20,10 +20,11 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 
 - **Expedição** (senha padrão: `exp!2027`) — vê o histórico de carregamentos (e, somente leitura, o de caixas) e pode registrar novos carregamentos.
 - **Almoxarifado** (senha padrão: `Almox0987`) — monta, altera e finaliza as caixas (ver [Fluxo de caixas](#fluxo-de-caixas) abaixo): move os itens pequenos do almoxarifado para o pátio da expedição.
+- **Produção** (senha padrão: `Prod#2026`) — reaproveita a mesma tela do Almoxarifado (monta/altera/finaliza), mas com estrutura própria no banco (tabelas `romaneios_producao`/`romaneio_producao_itens`, **não** `caixas`/`caixa_itens`) e sua própria lista de responsáveis. Não gera etiqueta nem código de barras físico — só o romaneio em PDF, com numeração própria (`PROD-00001`, `PROD-00002`, ...) — ver [Fluxo de romaneios de Produção](#fluxo-de-romaneios-de-produção).
 - **Em Campo** (senha padrão: `emcampo!26`) — confere o desembarque dos carregamentos no destino (ver [Fluxo de desembarque](#fluxo-de-desembarque) abaixo).
 - **Expedição Administrativo** (senha padrão: `Bioc!@09`) — reúne as telas de Expedição e Em Campo num só login, separadas por uma guia no topo. É o único perfil que permite digitar o código de um item manualmente (em vez de só escanear) e marcar/desmarcar itens do desembarque tocando direto na lista — os demais perfis só confirmam por leitura de código de barras.
 
-Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` em `backend/.env`:
+Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` em `backend/.env`:
 
 ```bash
 node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
@@ -51,13 +52,25 @@ Em "Novo Carregamento", "Nova Caixa" e nas telas de "Alterar", cada item tem seu
 
 Uma caixa passa por três estados: **aberta → fechada → expedida**.
 
-1. **Salvar** (perfil Almoxarifado) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
-2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável do Almoxarifado pode adicionar mais itens. Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
+1. **Salvar** (perfis Almoxarifado ou Expedição) — abre uma caixa nova com o primeiro lote de itens e, opcionalmente, o número do projeto ao qual ela pertence. Ela nasce **aberta** e ainda não tem código de barras.
+2. **Alterar** — enquanto a caixa estiver aberta, qualquer responsável de Almoxarifado/Expedição pode adicionar mais itens (inclusive de outro desses dois perfis — é uma tabela só, compartilhada). Cada rodada de "Alterar" exige selecionar quem está adicionando os itens naquele momento — o sistema guarda o responsável de cada item individualmente, então uma caixa pode ter itens de vários responsáveis diferentes.
 3. **Finalizar** — fecha a caixa: grava a data/hora de fechamento e gera o código de barras (`CXxxxxxx`), pronto para etiqueta. A partir daqui a caixa não aceita mais itens. A etiqueta (100mm × 70mm) traz o número do projeto (quando informado) e a data/hora de fechamento, além do código de barras — ver [Impressão de etiquetas](#impressão-de-etiquetas) para como ela sai fisicamente na impressora.
 4. **Romaneio** — disponível depois de finalizada. Gera um PDF com todos os itens, todos os responsáveis envolvidos e a data/hora de fechamento, baixa o arquivo automaticamente e envia uma cópia por e-mail para o(s) destinatário(s) configurado(s) em `ROMANEIO_CAIXA_EMAIL_TO`.
 5. **Expedida** — quando o código de barras da caixa é lido durante um "Novo Carregamento" (perfil Expedição), o status muda automaticamente para expedida.
 
-Os responsáveis do Almoxarifado são uma lista fixa (definida em `backend/constants.js` e replicada no `<select>` do frontend): **Kerllon Pereira**, **Léo Neves** e **Filipe Luchtenberg**.
+Os responsáveis são uma lista fixa compartilhada por Almoxarifado e Expedição (`ALMOXARIFADO_RESPONSAVEIS`, em `backend/constants.js` e replicada no frontend): **Kerllon Pereira**, **Léo Neves**, **Filipe Luchtenberg** e **Diter Doering**.
+
+> O perfil **Produção** NÃO participa deste fluxo — ele tem sua própria tabela, numeração e tela equivalente, descritas a seguir.
+
+## Fluxo de romaneios de Produção
+
+O perfil **Produção** monta seus próprios "romaneios" numa estrutura **totalmente separada** de caixas/caixa_itens (tabelas `romaneios_producao` e `romaneio_producao_itens`, rotas em `backend/routes/romaneiosProducao.js`, montadas em `/api/romaneios-producao`). A tela reaproveita os mesmos modais do Almoxarifado por conveniência, mas fala com esse backend próprio (ver `apiBaseCaixaAtual()`/`rotuloItemCaixaAtual()` no frontend). Diferenças importantes em relação ao fluxo de caixas:
+
+- **Sem etiqueta nem código de barras físico** — Produção não tem impressora Argox configurada, e o objetivo aqui é só gerar o romaneio em PDF. A tela de "Finalizar" não mostra preview de código de barras nem botão de imprimir; mostra direto um botão **"🧾 Gerar Romaneio"**.
+- **Numeração própria** — ao finalizar, o romaneio ganha um código sequencial próprio no formato `PROD-00001`, `PROD-00002`, ... (começando em 1, independente da numeração `CXxxxxxx` das caixas).
+- Fluxo igual ao de caixas fora isso: **Salvar** (aberto, sem código) → **Alterar** (mais itens, de um ou mais responsáveis) → **Finalizar** (gera o código `PROD-xxxxx`) → **Romaneio** (PDF + e-mail para `ROMANEIO_PRODUCAO_EMAIL_TO`).
+- Responsáveis próprios (`PRODUCAO_RESPONSAVEIS`, em `backend/constants.js`): **Diego Alves**, **Claudemir Miranda** e **Jânio Bauer**.
+- Como os romaneios de Produção não têm código de barras, eles **não** podem ser lidos/expandidos dentro de um "Novo Carregamento" (isso só funciona para caixas do Almoxarifado/Expedição).
 
 ## Fluxo de desembarque
 
@@ -72,7 +85,7 @@ Cada card na lista do perfil Em Campo mostra o status do desembarque: **Pendente
 
 ## Impressão de etiquetas
 
-As etiquetas de caixa (100mm × 70mm, com código de barras) saem direto nas impressoras térmicas **Argox OS-214 Plus** — uma dedicada ao perfil Almoxarifado, outra ao perfil Expedição — sem diálogo de impressão e sem depender do navegador do celular imprimir nada.
+As etiquetas de caixa (100mm × 70mm, com código de barras) saem direto nas impressoras térmicas **Argox OS-214 Plus** — uma dedicada ao perfil Almoxarifado, outra ao perfil Expedição — sem diálogo de impressão e sem depender do navegador do celular imprimir nada. O perfil Produção não usa etiqueta: seus romaneios (tabela própria, ver [Fluxo de romaneios de Produção](#fluxo-de-romaneios-de-produção)) não têm código de barras físico, então nem existe botão de imprimir pra ele.
 
 Como o backend fica hospedado numa VPS na nuvem e não tem acesso direto às impressoras (que estão na rede local da empresa, ligadas por USB a um computador sempre ligado), a impressão funciona em duas partes:
 
@@ -157,7 +170,7 @@ Para gerar um novo hash de senha (Expedição ou Em Campo) dentro do próprio co
 
 ```bash
 docker compose exec app node -e "require('bcrypt').hash('SUA_SENHA',12).then(console.log)"
-# copie o hash gerado para EXPEDICAO_PASSWORD_HASH, EM_CAMPO_PASSWORD_HASH, ALMOXARIFADO_PASSWORD_HASH ou EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH no .env
+# copie o hash gerado para EXPEDICAO_PASSWORD_HASH, EM_CAMPO_PASSWORD_HASH, ALMOXARIFADO_PASSWORD_HASH, PRODUCAO_PASSWORD_HASH ou EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH no .env
 # e rode: docker compose up -d --build
 ```
 
@@ -188,7 +201,7 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 ## Variáveis de ambiente necessárias (`backend/.env`)
 
-`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `PRODUCAO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_PRODUCAO_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
 As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas — ver [Impressão de etiquetas](#impressão-de-etiquetas).
 
@@ -203,6 +216,7 @@ mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto.sql   # campo 
 mysql -u root -p burntech_expedicao < alter_carregamentos_sequencial_projeto.sql  # controle "numero_projeto-sequencial" no romaneio de carregamento
 mysql -u root -p burntech_expedicao < alter_carregamentos_perfil_expedicao_administrativo.sql  # ENUM criado_por_perfil aceita o novo perfil
 mysql -u root -p burntech_expedicao < alter_etiqueta_fila.sql  # fila de impressão de etiquetas (Argox)
+mysql -u root -p burntech_expedicao < alter_caixas_perfil_producao.sql  # cria romaneios_producao/romaneio_producao_itens (perfil Produção — tabela própria, não caixas)
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)
