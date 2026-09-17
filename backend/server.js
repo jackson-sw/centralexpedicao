@@ -31,11 +31,22 @@ app.use(cors({
 app.use(express.json());
 
 // Rate limit geral
+// "skip" isenta os agentes locais (print-agent/ e desenho-agent/) deste
+// limite — eles ficam consultando várias filas (/api/etiquetas,
+// /api/romaneio-impressao, /api/desenhos-tecnicos) a cada poucos
+// segundos, 24/7, e por estarem todos na mesma rede da empresa
+// (mesmo IP público de saída) somados facilmente passavam dos 300
+// pedidos em 15 minutos — sem essa isenção, os agentes de impressão
+// paravam de funcionar sozinhos com HTTP 429 depois de um tempo. Só
+// isenta quem manda a chave certa (X-Agent-Key === AGENT_API_KEY);
+// quem não tem a chave continua sob o limite normal, então isso não
+// abre brecha pra abuso.
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 minutos
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => Boolean(process.env.AGENT_API_KEY) && req.headers['x-agent-key'] === process.env.AGENT_API_KEY,
 }));
 
 // Rate limit mais restrito para login
