@@ -27,17 +27,24 @@ const PADRAO_CODIGO_DESENHO = /^(\d{6})-([A-Za-z]{3}\d+)$/;
 // um item recém-salvo/editado, só quando o código bate com o padrão
 // acima. Best-effort: nunca lança erro pra fora — uma falha aqui não
 // pode derrubar o salvamento do item em si.
+// Retorna true quando conseguiu enfileirar (código bate com o padrão e o
+// INSERT deu certo) — usado tanto no fluxo automático (criação/edição de
+// item, valor de retorno ignorado) quanto na reimpressão manual (POST
+// /:id/reimprimir-desenhos), que precisa contar quantos itens entraram
+// na fila pra informar o usuário.
 async function enfileirarDesenhoTecnicoSeAplicavel(romaneioItemId, codigoItem) {
   const match = PADRAO_CODIGO_DESENHO.exec((codigoItem || '').trim());
-  if (!match) return;
+  if (!match) return false;
   const [, projeto, estrutura] = match;
   try {
     await db.query(
       `INSERT INTO desenho_tecnico_impressao_fila (romaneio_item_id, codigo_item, projeto, estrutura) VALUES (?, ?, ?, ?)`,
       [romaneioItemId, codigoItem.trim(), projeto, estrutura.toUpperCase()]
     );
+    return true;
   } catch (err) {
     console.error('[desenho-tecnico] falha ao enfileirar busca para item', romaneioItemId, ':', err.message);
+    return false;
   }
 }
 
@@ -369,6 +376,37 @@ router.post('/:id/romaneio', auth, apenasProducao, async (req, res) => {
   } catch (err) {
     console.error('[POST /romaneios-producao/:id/romaneio]', err.message);
     res.status(500).json({ erro: 'Erro ao gerar romaneio.' });
+  }
+});
+
+// POST /api/romaneios-producao/:id/reimprimir-desenhos — reenfileira a
+// busca+impressão do desenho técnico de TODOS os itens do romaneio que
+// batem com o padrão de código (ver PADRAO_CODIGO_DESENHO), de novo.
+// Existe porque o enfileiramento automático só acontece na criação do
+// item ou quando o código dele é alterado — clicar em "🧾 Romaneio" de
+// novo (reimpressão) não reenvia os desenhos pro desenho-agent, só o
+// PDF do romaneio em si. Ação manual e explícita: reimprime mesmo que o
+// desenho daquele item já tenha sido impresso com sucesso antes.
+router.post('/:id/reimprimir-desenhos', auth, apenasProducao, async (req, res) => {
+  try {
+    const [[romaneio]] = await db.query('SELECT id FROM romaneios_producao WHERE id = ?', [req.params.id]);
+    if (!romaneio) return res.status(404).json({ erro: 'Romaneio não encontrado.' });
+
+    const [itens] = await db.query(
+      'SELECT id, codigo_item FROM romaneio_producao_itens WHERE romaneio_id = ?',
+      [romaneio.id]
+    );
+
+    let enfileirados = 0;
+    for (const item of itens) {
+      const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
+      if (ok) enfileirados++;
+    }
+
+    res.json({ enfileirados, total_itens: itens.length });
+  } catch (err) {
+    console.error('[POST /romaneios-producao/:id/reimprimir-desenhos]', err.message);
+    res.status(500).json({ erro: 'Erro ao reenfileirar desenhos técnicos.' });
   }
 });
 

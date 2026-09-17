@@ -1288,6 +1288,13 @@ function renderFooterCaixaDetalhe(c) {
       botoes += `<button class="btn btn-out" id="btn-reimprimir-${c.id}" onclick="reimprimirEtiquetaCaixa(${c.id})">🖨️ Reimprimir</button>`;
     }
     botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
+    // Só Produção tem desenho técnico (ver PADRAO_CODIGO_DESENHO no
+    // backend) — o enfileiramento automático só dispara na criação/edição
+    // do item, então esse botão existe pra reimprimir os desenhos de novo
+    // sob demanda (ex.: impressora ficou sem papel na primeira vez).
+    if (PERFIL === 'producao') {
+      botoes += `<button class="btn btn-out" id="btn-reimprimir-desenhos-${c.id}" onclick="reimprimirDesenhosCaixa(${c.id})">📐 Reimprimir Desenhos</button>`;
+    }
   }
   footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>${botoes}`;
 }
@@ -1671,6 +1678,28 @@ async function finalizarCaixa(id) {
 // Não usa o helper api() porque a resposta é um PDF binário, não JSON.
 async function gerarRomaneio(id, btnId) {
   await baixarRomaneio(`${apiBaseCaixaAtual()}/${id}/romaneio`, btnId || `btn-romaneio-${id}`, `romaneio-${id}.pdf`);
+}
+
+// Reenfileira a busca+impressão dos desenhos técnicos de todos os itens
+// do romaneio (perfil Produção) — não gera nem baixa nenhum PDF aqui, só
+// dispara os jobs pro desenho-agent/ pegar na próxima consulta.
+async function reimprimirDesenhosCaixa(id) {
+  const btnId = `btn-reimprimir-desenhos-${id}`;
+  const btn = document.getElementById(btnId);
+  const textoOriginal = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  try {
+    const data = await api('POST', `${apiBaseCaixaAtual()}/${id}/reimprimir-desenhos`, {});
+    if (data.enfileirados > 0) {
+      toast(`${data.enfileirados} desenho(s) técnico(s) enviado(s) para impressão.`);
+    } else {
+      toast('Nenhum item deste romaneio tem desenho técnico associado.', true);
+    }
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
+  }
 }
 
 async function gerarRomaneioCarregamento(id) {

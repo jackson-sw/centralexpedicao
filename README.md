@@ -114,6 +114,10 @@ Este fluxo é **diferente** do de etiqueta/romaneio: o backend não gera nem gua
 
 Ver `desenho-agent/README.md` para instalação e configuração para iniciar junto com o Windows.
 
+### Reimpressão manual dos desenhos
+
+O enfileiramento automático acima só dispara quando o item é criado ou tem o `codigo_item` alterado — clicar de novo em "🧾 Romaneio" (reimpressão do romaneio) **não** reenvia os desenhos. Pra isso existe o botão **"📐 Reimprimir Desenhos"**, visível só pro perfil Produção no detalhe do romaneio (`frontend/index.html`, `renderFooterCaixaDetalhe`), que chama `POST /api/romaneios-producao/:id/reimprimir-desenhos`: reenfileira a busca+impressão de todos os itens do romaneio que batem com o padrão de código, mesmo os que já foram impressos com sucesso antes — é uma ação manual e explícita, pensada pra casos como a impressora ter ficado sem papel na primeira tentativa.
+
 ## Painel Administrativo (`/admin`)
 
 Consulta do catálogo de itens/materiais (código, descrição, quantidade), com busca, ordenação e paginação — **somente leitura**. Cadastro, edição e exclusão de itens não acontecem mais aqui: são feitos direto no ERP (ver seção abaixo). Acesse em `http://localhost:3002/admin` (ou `https://seu-dominio.com.br/admin` em produção) e entre com a senha do Admin.
