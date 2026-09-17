@@ -159,9 +159,18 @@ async function processarJob(job) {
     const arquivo = await acharArquivoDesenho(pastaEstrutura, job.projeto, job.estrutura);
 
     log(`Encontrado "${arquivo}" — imprimindo em "${IMPRESSORA_DESENHOS_NOME}"...`);
+    // Desenhos técnicos vêm do CAD em qualquer tamanho de página (A3, A1,
+    // A0...), quase nunca A4. Sem "scale: fit" o SumatraPDF imprime no
+    // tamanho original do PDF, cortando o que passar do papel A4 físico
+    // carregado na impressora — "fit" encolhe o conteúdo pra caber
+    // inteiro na página, mantendo a proporção. "paperSize: A4" garante
+    // que a página impressa é sempre A4, independente do tamanho de
+    // página definido dentro do PDF.
     await print(arquivo, {
       printer: IMPRESSORA_DESENHOS_NOME,
       silent: true,
+      scale: 'fit',
+      paperSize: 'A4',
     });
 
     await marcarConcluido(job.id);

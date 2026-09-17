@@ -26,7 +26,9 @@ pra buscar?" a cada poucos segundos. Quando tem, ele:
    `250013-HRS02510T-DGA109-R00.pdf`). Se houver mais de uma revisão
    (R00, R01, R02...), sempre imprime a **mais alta**.
 4. Manda o PDF (todas as páginas) direto pra impressora configurada,
-   sem diálogo de impressão.
+   sem diálogo de impressão — sempre em papel A4, encolhendo o
+   conteúdo pra caber inteiro na página (o desenho do CAD quase nunca
+   já vem no tamanho A4; ver "Desenho saindo cortado" abaixo).
 
 Se qualquer passo falhar (pasta não encontrada, mais de uma pasta
 "batendo" com o prefixo, arquivo não encontrado), o agente registra o
@@ -120,3 +122,15 @@ Windows**.
   caractere, ao nome da impressora como aparece NESTA máquina (pode
   ser diferente do nome visto no computador do Almoxarifado, mesmo
   sendo a mesma impressora física).
+- **Desenho saindo cortado/fora do esquadro do papel A4** — o agente já
+  manda `scale: "fit"` (encolhe o conteúdo pra caber na página) e
+  `paperSize: "A4"` (força a página impressa a ser A4, mesmo que o PDF
+  do CAD tenha sido exportado em A3/A1/A0) pro SumatraPDF. Se mesmo
+  assim continuar cortando, confira: (1) se `desenho-agent/agent.js`
+  na máquina realmente é esta versão atualizada (redeploy manual,
+  não é publicado junto com o backend); (2) o papel carregado na
+  bandeja é A4 mesmo, e não um tamanho menor configurado por engano no
+  driver da impressora; (3) as margens não-imprimíveis da impressora —
+  se o desenho tiver conteúdo bem rente à borda, pode aparecer cortado
+  nos poucos milímetros que a impressora fisicamente não alcança,
+  mesmo com "fit" ativo.
