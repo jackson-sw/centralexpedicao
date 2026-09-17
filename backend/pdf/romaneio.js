@@ -25,13 +25,15 @@ function fmtQtd(q) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-// Gera o PDF do romaneio de uma caixa (ou romaneio de Produção) já
-// finalizada e resolve com um Buffer.
-// { caixa: linha de v_caixas_resumo (ou v_romaneios_producao_resumo),
-//   itens, responsaveis: string[], titulo, rotuloResponsaveis }
-// titulo/rotuloResponsaveis são opcionais — usados por
-// backend/routes/romaneiosProducao.js pra trocar "CAIXA"/"a caixa" por
-// "PRODUÇÃO"/"o romaneio" sem duplicar todo este arquivo.
+// Gera o PDF do romaneio de uma caixa já finalizada (Almoxarifado,
+// Expedição ou Produção — mesma rota, mesmo PDF) e resolve com um
+// Buffer.
+// { caixa: linha de v_caixas_resumo, itens, responsaveis: string[],
+//   titulo, rotuloResponsaveis }
+// titulo/rotuloResponsaveis são opcionais (com valor padrão abaixo) —
+// deixados parametrizáveis caso surja no futuro outro tipo de
+// romaneio que precise de um título/rótulo diferente, sem duplicar
+// todo este arquivo.
 function gerarRomaneioPDF({ caixa, itens, responsaveis, titulo, rotuloResponsaveis }) {
   titulo = titulo || 'ROMANEIO DE CAIXA';
   rotuloResponsaveis = rotuloResponsaveis || 'Responsável(is) que montaram a caixa:';

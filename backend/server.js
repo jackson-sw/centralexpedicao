@@ -7,7 +7,6 @@ const path      = require('path');
 const authRoutes             = require('./routes/auth');
 const carregamentosRoutes    = require('./routes/carregamentos');
 const caixasRoutes           = require('./routes/caixas');
-const romaneiosProducaoRoutes = require('./routes/romaneiosProducao');
 const romaneioImpressaoRoutes = require('./routes/romaneioImpressao');
 const desenhosTecnicosRoutes  = require('./routes/desenhosTecnicos');
 const itensMateriaisRoutes   = require('./routes/itensMateriais');
@@ -23,16 +22,16 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   // Permite que o frontend leia os cabeçalhos customizados que informam
   // se o e-mail do romaneio foi enviado com sucesso, e por quê não, quando
-  // for o caso (ver POST /api/caixas/:id/romaneio, /api/romaneios-producao/:id/romaneio
-  // e /api/carregamentos/:id/romaneio), e se a impressão automática na
-  // laser foi enfileirada (só o romaneio de Produção, por enquanto).
-  exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro', 'X-Impressao-Enfileirada', 'X-Impressao-Erro'],
+  // for o caso (ver POST /api/caixas/:id/romaneio e /api/carregamentos/:id/romaneio),
+  // e — só quando a caixa é do perfil Produção — se a impressão automática
+  // na laser e o reenfileiramento dos desenhos técnicos foram feitos.
+  exposedHeaders: ['X-Email-Enviado', 'X-Email-Erro', 'X-Impressao-Enfileirada', 'X-Impressao-Erro', 'X-Desenhos-Enfileirados'],
 }));
 app.use(express.json());
 
 // Rate limit geral
 // "skip" isenta os agentes locais (print-agent/ e desenho-agent/) deste
-// limite — eles ficam consultando várias filas (/api/etiquetas,
+// limite — eles ficam consultando suas filas (/api/etiquetas,
 // /api/romaneio-impressao, /api/desenhos-tecnicos) a cada poucos
 // segundos, 24/7, e por estarem todos na mesma rede da empresa
 // (mesmo IP público de saída) somados facilmente passavam dos 300
@@ -60,7 +59,6 @@ app.use('/api/auth', rateLimit({
 app.use('/api/auth',           authRoutes);
 app.use('/api/carregamentos',  carregamentosRoutes);
 app.use('/api/caixas',         caixasRoutes);
-app.use('/api/romaneios-producao', romaneiosProducaoRoutes);
 app.use('/api/romaneio-impressao', romaneioImpressaoRoutes);
 app.use('/api/desenhos-tecnicos', desenhosTecnicosRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);

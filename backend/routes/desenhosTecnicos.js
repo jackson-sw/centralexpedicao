@@ -2,8 +2,8 @@ const router = require('express').Router();
 const db     = require('../db');
 
 // Fila de busca + impressão automática do desenho técnico (PDF) de um
-// item lido no romaneio de Produção — ver backend/routes/
-// romaneiosProducao.js (quem enfileira, ao parsear o codigo_item) e
+// item de caixa lido pelo perfil Produção — ver backend/routes/
+// caixas.js (quem enfileira, ao parsear o codigo_item) e
 // desenho-agent/ (quem de fato busca o arquivo no servidor de
 // arquivos on-premises e imprime, sem passar o PDF por aqui: o
 // backend só registra o pedido e o resultado).
@@ -24,7 +24,7 @@ function apenasAgente(req, res, next) {
 router.get('/pendentes', apenasAgente, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, romaneio_item_id, codigo_item, projeto, estrutura, criado_em
+      `SELECT id, caixa_item_id, codigo_item, projeto, estrutura, criado_em
        FROM desenho_tecnico_impressao_fila
        WHERE status = 'pendente'
        ORDER BY criado_em ASC

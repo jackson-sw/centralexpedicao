@@ -3,13 +3,17 @@ const db     = require('../db');
 const { auth } = require('../middleware/auth');
 const { gerarEtiquetaPDF } = require('../pdf/etiqueta');
 
-// Só estes dois perfis têm impressora Argox configurada (uma cada,
-// compartilhada por todo mundo logado naquele perfil — não há login
-// por pessoa neste sistema). O nome vem do .env porque é o nome
-// exato da fila de impressão no Windows do computador-ponte.
+// Só estes perfis têm impressora Argox configurada (uma para
+// Almoxarifado, outra para Expedição — compartilhada por todo mundo
+// logado naquele perfil, não há login por pessoa neste sistema).
+// Produção usa a MESMA impressora/fila do Almoxarifado (mesmo nome de
+// env var — não é uma terceira Argox física). O nome vem do .env
+// porque é o nome exato da fila de impressão no Windows do
+// computador-ponte.
 const IMPRESSORA_POR_PERFIL = {
   almoxarifado: process.env.IMPRESSORA_ALMOXARIFADO_NOME,
   expedicao:    process.env.IMPRESSORA_EXPEDICAO_NOME,
+  producao:     process.env.IMPRESSORA_ALMOXARIFADO_NOME,
 };
 
 // Bloqueio: só o agente de impressão local (rodando no computador
@@ -25,9 +29,9 @@ function apenasAgente(req, res, next) {
 }
 
 // POST /api/etiquetas — enfileira a impressão da etiqueta de uma
-// caixa já finalizada (perfis Almoxarifado e Expedição). O PDF em si
-// só é gerado quando o agente local baixa o job (GET /:id/pdf),
-// então esta rota é rápida — só grava a intenção na fila.
+// caixa já finalizada (perfis Almoxarifado, Expedição e Produção). O
+// PDF em si só é gerado quando o agente local baixa o job (GET
+// /:id/pdf), então esta rota é rápida — só grava a intenção na fila.
 router.post('/', auth, async (req, res) => {
   try {
     const perfil = req.usuario?.perfil;

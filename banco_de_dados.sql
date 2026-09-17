@@ -65,7 +65,7 @@ CREATE TABLE caixas (
   responsavel_nome  VARCHAR(150) NOT NULL,
   numero_projeto    VARCHAR(50)  NULL,
   observacoes       VARCHAR(500) NULL,
-  criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado') NOT NULL DEFAULT 'almoxarifado',
+  criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado', 'producao') NOT NULL DEFAULT 'almoxarifado',
   criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   fechado_em        DATETIME NULL,
   expedido_em       DATETIME NULL,
@@ -76,112 +76,30 @@ CREATE TABLE caixas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
--- Tabela: romaneios_producao
--- Perfil Produção tem sua PRÓPRIA estrutura, separada de
--- caixas/caixa_itens (não compartilha sequência nem tabela com
--- Almoxarifado/Expedição). Objetivo aqui é só gerar romaneio — não
--- existe etiqueta/código de barras físico nem impressora configurada
--- pra este perfil, então "codigo" é só um número de identificação
--- (não precisa ser escaneável). Fluxo igual ao de caixas: nasce
--- "aberto" e pode receber itens de mais de um responsável até ser
--- finalizado ("fechado"), quando ganha o código sequencial próprio.
+-- Tabela: romaneio_impressao_fila
+-- Fila de impressão automática do romaneio de uma caixa do perfil
+-- Produção, numa impressora a laser comum (papel A4) — não confundir
+-- com etiqueta_fila (etiqueta da caixa, Argox, 100x70mm). Roda no
+-- MESMO computador-ponte do perfil Almoxarifado (ver print-agent/), só
+-- que numa impressora diferente (IMPRESSORA_ROMANEIO_NOME). Um job é
+-- criado automaticamente toda vez que o romaneio de uma caixa de
+-- Produção é gerado (POST /api/caixas/:id/romaneio), junto com o
+-- envio por e-mail — caixas de Almoxarifado/Expedição nunca entram
+-- nesta fila.
 -- ------------------------------------------------------------
-CREATE TABLE romaneios_producao (
-  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  -- Gerado em POST /:id/finalizar como 'PROD-' + id com 5 dígitos
-  -- (ex.: PROD-00001) — sequência própria, começando em 1, independente
-  -- da numeração de caixas.
-  codigo            VARCHAR(20)  NULL,
-  status            ENUM('aberto', 'fechado') NOT NULL DEFAULT 'aberto',
-  responsavel_nome  VARCHAR(150) NOT NULL,
-  numero_projeto    VARCHAR(50)  NULL,
-  observacoes       VARCHAR(500) NULL,
-  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  fechado_em        DATETIME NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_romaneios_producao_codigo (codigo),
-  KEY idx_romaneios_producao_status (status),
-  KEY idx_romaneios_producao_criado_em (criado_em)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ------------------------------------------------------------
--- Tabela: romaneio_producao_impressao_fila
--- Fila de impressão automática do romaneio de Produção numa
--- impressora a laser comum (papel A4) — não confundir com
--- etiqueta_fila (etiqueta da caixa, Argox, 100x70mm). Roda no MESMO
--- computador-ponte do perfil Almoxarifado (ver print-agent/), só que
--- numa impressora diferente (IMPRESSORA_ROMANEIO_NOME). Um job é
--- criado automaticamente toda vez que o romaneio é gerado (POST
--- /api/romaneios-producao/:id/romaneio), junto com o envio por e-mail.
--- ------------------------------------------------------------
-CREATE TABLE romaneio_producao_impressao_fila (
+CREATE TABLE romaneio_impressao_fila (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  romaneio_id  INT UNSIGNED NOT NULL,
+  caixa_id     INT UNSIGNED NOT NULL,
   impressora   VARCHAR(100) NOT NULL,
   status       ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
   erro_msg     VARCHAR(300) NULL,
   criado_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   impresso_em  DATETIME NULL,
   PRIMARY KEY (id),
-  KEY idx_romaneio_producao_impressao_fila_status (status),
-  KEY idx_romaneio_producao_impressao_fila_romaneio_id (romaneio_id),
-  CONSTRAINT fk_romaneio_producao_impressao_fila_romaneio
-    FOREIGN KEY (romaneio_id) REFERENCES romaneios_producao(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ------------------------------------------------------------
--- Tabela: romaneio_producao_itens
--- Relação um-para-muitos: cada romaneio de Produção contém N itens,
--- podendo vir de mais de um responsável enquanto estiver "aberto"
--- (mesmo padrão de caixa_itens).
--- ------------------------------------------------------------
-CREATE TABLE romaneio_producao_itens (
-  id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  romaneio_id      INT UNSIGNED NOT NULL,
-  codigo_item      VARCHAR(100) NOT NULL,
-  descricao        VARCHAR(255) NOT NULL,
-  quantidade       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
-  responsavel_nome VARCHAR(150) NOT NULL,
-  ordem            SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  criado_em        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_romaneio_producao_itens_romaneio_id (romaneio_id),
-  KEY idx_romaneio_producao_itens_codigo_item (codigo_item),
-  CONSTRAINT fk_romaneio_producao_itens_romaneio
-    FOREIGN KEY (romaneio_id) REFERENCES romaneios_producao(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ------------------------------------------------------------
--- Tabela: desenho_tecnico_impressao_fila
--- Fila de busca + impressão automática do desenho técnico (PDF) de um
--- item lido no romaneio de Produção — só quando o código do item bate
--- com o padrão "NNNNNN-LLLddd" (6 dígitos do projeto + hífen + 3
--- letras da estrutura + número), ex.: "250013-DGA109". Diferente das
--- outras filas de impressão, o backend NÃO gera o PDF aqui — quem
--- busca o arquivo (no servidor de arquivos on-premises,
--- D:\Engenharia\...) e imprime é o desenho-agent/, direto, sem passar
--- o arquivo por aqui. Esta tabela só registra o pedido e o resultado
--- (impresso ou não encontrado/erro).
--- ------------------------------------------------------------
-CREATE TABLE desenho_tecnico_impressao_fila (
-  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  romaneio_item_id  INT UNSIGNED NOT NULL,
-  codigo_item       VARCHAR(100) NOT NULL,
-  projeto           VARCHAR(10)  NOT NULL,
-  estrutura         VARCHAR(20)  NOT NULL,
-  status            ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
-  erro_msg          VARCHAR(300) NULL,
-  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  concluido_em      DATETIME NULL,
-  PRIMARY KEY (id),
-  KEY idx_desenho_tecnico_impressao_fila_status (status),
-  KEY idx_desenho_tecnico_impressao_fila_item (romaneio_item_id),
-  CONSTRAINT fk_desenho_tecnico_impressao_fila_item
-    FOREIGN KEY (romaneio_item_id) REFERENCES romaneio_producao_itens(id)
+  KEY idx_romaneio_impressao_fila_status (status),
+  KEY idx_romaneio_impressao_fila_caixa_id (caixa_id),
+  CONSTRAINT fk_romaneio_impressao_fila_caixa
+    FOREIGN KEY (caixa_id) REFERENCES caixas(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -189,7 +107,8 @@ CREATE TABLE desenho_tecnico_impressao_fila (
 -- ------------------------------------------------------------
 -- Tabela: etiqueta_fila
 -- Fila de impressão física da etiqueta da caixa (impressoras Argox,
--- uma por perfil — Almoxarifado e Expedição). O app só enfileira
+-- uma por perfil físico — Almoxarifado e Expedição; Produção usa a
+-- mesma impressora/fila do Almoxarifado). O app só enfileira
 -- (POST /api/etiquetas); um agente local, rodando no computador
 -- ligado às impressoras, consulta esta fila periodicamente
 -- (GET /api/etiquetas/pendentes), baixa o PDF já pronto da etiqueta
@@ -199,7 +118,7 @@ CREATE TABLE etiqueta_fila (
   id                     INT UNSIGNED NOT NULL AUTO_INCREMENT,
   caixa_id               INT UNSIGNED NOT NULL,
   impressora             VARCHAR(100) NOT NULL,
-  solicitado_por_perfil  ENUM('almoxarifado', 'expedicao') NOT NULL,
+  solicitado_por_perfil  ENUM('almoxarifado', 'expedicao', 'producao') NOT NULL,
   status                 ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
   erro_msg               VARCHAR(300) NULL,
   criado_em              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -234,6 +153,37 @@ CREATE TABLE caixa_itens (
   KEY idx_caixa_itens_codigo_item (codigo_item),
   CONSTRAINT fk_caixa_itens_caixa
     FOREIGN KEY (caixa_id) REFERENCES caixas(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Tabela: desenho_tecnico_impressao_fila
+-- Fila de busca + impressão automática do desenho técnico (PDF) de um
+-- item de caixa lido pelo perfil Produção — só quando o código do
+-- item bate com o padrão "NNNNNN-LLLddd" (6 dígitos do projeto +
+-- hífen + 3 letras da estrutura + número), ex.: "250013-DGA109".
+-- Diferente das outras filas de impressão, o backend NÃO gera o PDF
+-- aqui — quem busca o arquivo (no servidor de arquivos on-premises,
+-- D:\Engenharia\...) e imprime é o desenho-agent/, direto, sem passar
+-- o arquivo por aqui. Esta tabela só registra o pedido e o resultado
+-- (impresso ou não encontrado/erro).
+-- ------------------------------------------------------------
+CREATE TABLE desenho_tecnico_impressao_fila (
+  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  caixa_item_id     INT UNSIGNED NOT NULL,
+  codigo_item       VARCHAR(100) NOT NULL,
+  projeto           VARCHAR(10)  NOT NULL,
+  estrutura         VARCHAR(20)  NOT NULL,
+  status            ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
+  erro_msg          VARCHAR(300) NULL,
+  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  concluido_em      DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_desenho_tecnico_impressao_fila_status (status),
+  KEY idx_desenho_tecnico_impressao_fila_item (caixa_item_id),
+  CONSTRAINT fk_desenho_tecnico_impressao_fila_item
+    FOREIGN KEY (caixa_item_id) REFERENCES caixa_itens(id)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -299,26 +249,6 @@ FROM caixas c
 LEFT JOIN caixa_itens ci ON ci.caixa_id = c.id
 GROUP BY c.id;
 
--- ------------------------------------------------------------
--- View: v_romaneios_producao_resumo
--- Lista de romaneios de Produção com contagem de itens e quantidade
--- total (mesmo papel de v_caixas_resumo, tabela própria).
--- ------------------------------------------------------------
-CREATE OR REPLACE VIEW v_romaneios_producao_resumo AS
-SELECT
-  r.id,
-  r.codigo,
-  r.status,
-  r.responsavel_nome,
-  r.numero_projeto,
-  r.observacoes,
-  r.criado_em,
-  r.fechado_em,
-  COUNT(ri.id)                    AS total_itens,
-  COALESCE(SUM(ri.quantidade), 0) AS quantidade_total
-FROM romaneios_producao r
-LEFT JOIN romaneio_producao_itens ri ON ri.romaneio_id = r.id
-GROUP BY r.id;
 
 -- ------------------------------------------------------------
 -- View: v_carregamentos_resumo

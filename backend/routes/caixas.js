@@ -3,18 +3,48 @@ const db     = require('../db');
 const { auth, apenasMontagemCaixa } = require('../middleware/auth');
 const { RESPONSAVEIS_POR_PERFIL } = require('../constants');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
-const { gerarRomaneioPDF } = require('../pdf/romaneio');
+const { montarPdfRomaneioCaixa } = require('../services/romaneioCaixa');
 
-// Almoxarifado e Expedição compartilham a mesma lista fixa de nomes
-// (ver RESPONSAVEIS_POR_PERFIL em constants.js) — valida contra a
-// lista de quem está logado agora, não de quem abriu a caixa
-// originalmente (uma caixa pode receber itens de responsáveis
-// diferentes ao longo do tempo, inclusive de outro perfil, ver rota
-// POST /:id/itens). Produção tem tabela própria — ver
-// backend/routes/romaneiosProducao.js.
+// Almoxarifado, Expedição e Produção compartilham esta mesma tabela e
+// fluxo (ver RESPONSAVEIS_POR_PERFIL em constants.js) — cada perfil só
+// tem sua própria lista de nomes válidos. Valida contra a lista de
+// quem está logado agora, não de quem abriu a caixa originalmente (uma
+// caixa pode receber itens de responsáveis diferentes ao longo do
+// tempo, inclusive de outro perfil, ver rota POST /:id/itens).
 function responsavelValido(nome, perfil) {
   const lista = RESPONSAVEIS_POR_PERFIL[perfil] || [];
   return typeof nome === 'string' && lista.includes(nome.trim());
+}
+
+// Reconhece códigos de item no formato "NNNNNN-LLLddd" — 6 dígitos do
+// número do projeto, hífen, 3 letras da estrutura + número da peça
+// (ex.: "250013-DGA109"). Só o perfil Produção lê itens nesse formato
+// (estrutura de engenharia) — os demais perfis usam código de
+// material do ERP, que não bate com este padrão. Itens que não batem
+// simplesmente não têm desenho técnico pra buscar — ver desenho-agent/.
+const PADRAO_CODIGO_DESENHO = /^(\d{6})-([A-Za-z]{3}\d+)$/;
+
+// Enfileira a busca+impressão automática do desenho técnico (PDF) de
+// um item recém-salvo/editado do perfil Produção, só quando o código
+// bate com o padrão acima. Best-effort: nunca lança erro pra fora —
+// uma falha aqui não pode derrubar o salvamento do item em si. Retorna
+// true quando conseguiu enfileirar — usado também pela reimpressão
+// manual (POST /:id/reimprimir-desenhos) pra contar quantos itens
+// entraram na fila.
+async function enfileirarDesenhoTecnicoSeAplicavel(caixaItemId, codigoItem) {
+  const match = PADRAO_CODIGO_DESENHO.exec((codigoItem || '').trim());
+  if (!match) return false;
+  const [, projeto, estrutura] = match;
+  try {
+    await db.query(
+      `INSERT INTO desenho_tecnico_impressao_fila (caixa_item_id, codigo_item, projeto, estrutura) VALUES (?, ?, ?, ?)`,
+      [caixaItemId, codigoItem.trim(), projeto, estrutura.toUpperCase()]
+    );
+    return true;
+  } catch (err) {
+    console.error('[desenho-tecnico] falha ao enfileirar busca para item', caixaItemId, ':', err.message);
+    return false;
+  }
 }
 
 // GET /api/caixas — histórico (mais recentes primeiro)
@@ -81,14 +111,15 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/caixas — abrir uma nova caixa (Almoxarifado ou Expedição)
-// A caixa nasce com status "aberta" e SEM código de barras — o código
-// só é gerado ao finalizar (POST /:id/finalizar). Enquanto aberta, ela
-// pode receber mais itens de outros responsáveis via POST /:id/itens.
-// O código de barras (CX + id) sai direto do AUTO_INCREMENT da tabela
-// caixas — como é uma tabela só, compartilhada pelos dois perfis, a
-// numeração segue uma sequência única independente de quem criou cada
-// caixa (não existe uma sequência separada por perfil).
+// POST /api/caixas — abrir uma nova caixa (Almoxarifado, Expedição ou
+// Produção). A caixa nasce com status "aberta" e SEM código de barras
+// — o código só é gerado ao finalizar (POST /:id/finalizar). Enquanto
+// aberta, ela pode receber mais itens de outros responsáveis via POST
+// /:id/itens. O código de barras (CX + id) sai direto do
+// AUTO_INCREMENT da tabela caixas — como é uma tabela só, compartilhada
+// pelos três perfis, a numeração segue uma sequência única independente
+// de quem criou cada caixa (não existe uma sequência separada por
+// perfil).
 router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
   try {
     const { responsavel_nome, numero_projeto, observacoes, itens } = req.body;
@@ -134,6 +165,16 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
       throw err;
     } finally {
       conn.release();
+    }
+
+    // Busca/impressão automática de desenho técnico — só Produção lê
+    // itens no formato de estrutura de engenharia (ver
+    // PADRAO_CODIGO_DESENHO acima). Fire-and-forget: nunca atrasa nem
+    // derruba a resposta desta rota.
+    if (req.usuario.perfil === 'producao') {
+      for (let i = 0; i < itens.length; i++) {
+        await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+      }
     }
 
     res.status(201).json({ id: caixaId, status: 'aberta', itens_ids: itensIds, mensagem: 'Caixa salva. Use "Finalizar" quando estiver pronta.' });
@@ -201,6 +242,12 @@ router.post('/:id/itens', auth, apenasMontagemCaixa, async (req, res) => {
       conn.release();
     }
 
+    if (req.usuario.perfil === 'producao') {
+      for (let i = 0; i < itens.length; i++) {
+        await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+      }
+    }
+
     res.json({ itens_ids: itensIds, mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} por ${responsavel_nome}.` });
   } catch (err) {
     console.error('[POST /caixas/:id/itens]', err.message);
@@ -226,11 +273,24 @@ router.put('/:caixaId/itens/:itemId', auth, apenasMontagemCaixa, async (req, res
       return res.status(409).json({ erro: 'Esta caixa já foi finalizada e não aceita alterações.' });
     }
 
+    // Guarda o código de antes da edição — só reenfileira a busca do
+    // desenho técnico (perfil Produção) se o código realmente mudou,
+    // pra não reimprimir à toa numa correção só de quantidade/descrição.
+    const [[itemAntes]] = await db.query(
+      'SELECT codigo_item FROM caixa_itens WHERE id = ? AND caixa_id = ?',
+      [req.params.itemId, caixa.id]
+    );
+    if (!itemAntes) return res.status(404).json({ erro: 'Item não pertence a esta caixa.' });
+
     const [result] = await db.query(
       'UPDATE caixa_itens SET codigo_item = ?, descricao = ?, quantidade = ? WHERE id = ? AND caixa_id = ?',
       [codigo_item, descricao, quantidade, req.params.itemId, caixa.id]
     );
     if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a esta caixa.' });
+
+    if (req.usuario.perfil === 'producao' && itemAntes.codigo_item.trim() !== codigo_item.trim()) {
+      await enfileirarDesenhoTecnicoSeAplicavel(Number(req.params.itemId), codigo_item);
+    }
 
     res.json({ id: Number(req.params.itemId), mensagem: 'Item atualizado.' });
   } catch (err) {
@@ -283,21 +343,30 @@ router.post('/:id/finalizar', auth, apenasMontagemCaixa, async (req, res) => {
 // responsáveis + data de fechamento), envia por e-mail e devolve o
 // PDF na resposta para visualização/impressão imediata. Só é
 // possível depois de a caixa ter sido finalizada.
+//
+// Caixas do perfil Produção (caixa.criado_por_perfil === 'producao')
+// têm dois comportamentos extras, automáticos, disparados junto com
+// este mesmo clique em "🧾 Romaneio" — nenhum dos dois existe para
+// caixas de Almoxarifado/Expedição:
+//   1. Impressão automática do romaneio numa impressora a laser (papel
+//      A4), via fila própria (romaneio_impressao_fila) — ver seção
+//      "Impressão automática do romaneio de Produção" no README.
+//   2. Reenfileiramento da busca/impressão do desenho técnico de todos
+//      os itens da caixa (mesma lógica do botão manual "📐 Reimprimir
+//      Desenhos" abaixo) — garante que o desenho sai sempre que o
+//      romaneio é (re)gerado, sem depender de lembrar de clicar no
+//      botão manual à parte.
 router.post('/:id/romaneio', auth, async (req, res) => {
   try {
-    const [[caixa]] = await db.query('SELECT * FROM v_caixas_resumo WHERE id = ?', [req.params.id]);
-    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
-    if (caixa.status === 'aberta') {
+    const [[caixaStatus]] = await db.query('SELECT status, criado_por_perfil FROM caixas WHERE id = ?', [req.params.id]);
+    if (!caixaStatus) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    if (caixaStatus.status === 'aberta') {
       return res.status(400).json({ erro: 'Finalize a caixa antes de gerar o romaneio.' });
     }
 
-    const [itens] = await db.query(
-      'SELECT * FROM caixa_itens WHERE caixa_id = ? ORDER BY ordem ASC, id ASC',
-      [caixa.id]
-    );
-    const responsaveis = [...new Set(itens.map(i => i.responsavel_nome).filter(Boolean))];
-
-    const pdfBuffer = await gerarRomaneioPDF({ caixa, itens, responsaveis });
+    const dados = await montarPdfRomaneioCaixa(req.params.id);
+    if (!dados) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    const { caixa, itens, responsaveis, pdfBuffer } = dados;
     const nomeArquivo = `romaneio-${caixa.codigo_barras || caixa.id}.pdf`;
 
     let emailEnviado = false;
@@ -330,10 +399,86 @@ router.post('/:id/romaneio', auth, async (req, res) => {
     res.set('Content-Disposition', `inline; filename="${nomeArquivo}"`);
     res.set('X-Email-Enviado', emailEnviado ? 'true' : 'false');
     if (emailErro) res.set('X-Email-Erro', emailErro);
+
+    if (caixaStatus.criado_por_perfil === 'producao') {
+      // 1) Impressão automática na laser (papel A4), no mesmo
+      // computador-ponte do perfil Almoxarifado (ver print-agent/) —
+      // só enfileira o pedido aqui; quem imprime de verdade é o
+      // agente local, que baixa o PDF de novo via GET
+      // /api/romaneio-impressao/:id/pdf (mesma lógica de
+      // montarPdfRomaneioCaixa, não reaproveita este buffer).
+      let impressaoEnfileirada = false;
+      let impressaoErro = '';
+      const impressora = (process.env.IMPRESSORA_ROMANEIO_NOME || '').trim();
+      if (impressora) {
+        try {
+          await db.query(
+            `INSERT INTO romaneio_impressao_fila (caixa_id, impressora) VALUES (?, ?)`,
+            [caixa.id, impressora]
+          );
+          impressaoEnfileirada = true;
+        } catch (filaErr) {
+          impressaoErro = sanitizarErroHeader(filaErr.message);
+          console.error('[POST /caixas/:id/romaneio] falha ao enfileirar impressão:', filaErr.message);
+        }
+      } else {
+        impressaoErro = 'IMPRESSORA_ROMANEIO_NOME nao configurado no servidor.';
+        console.warn('[POST /caixas/:id/romaneio] IMPRESSORA_ROMANEIO_NOME não configurado — impressão não enfileirada.');
+      }
+      res.set('X-Impressao-Enfileirada', impressaoEnfileirada ? 'true' : 'false');
+      if (impressaoErro) res.set('X-Impressao-Erro', impressaoErro);
+
+      // 2) Reenfileira a busca/impressão do desenho técnico de TODOS
+      // os itens da caixa — mesma ação do botão manual "📐 Reimprimir
+      // Desenhos" (ver rota abaixo), disparada automaticamente aqui
+      // pra não depender de lembrar de clicar em outro botão.
+      let desenhosEnfileirados = 0;
+      for (const item of itens) {
+        const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
+        if (ok) desenhosEnfileirados++;
+      }
+      res.set('X-Desenhos-Enfileirados', String(desenhosEnfileirados));
+    }
+
     res.send(pdfBuffer);
   } catch (err) {
     console.error('[POST /caixas/:id/romaneio]', err.message);
     res.status(500).json({ erro: 'Erro ao gerar romaneio.' });
+  }
+});
+
+// POST /api/caixas/:id/reimprimir-desenhos — reenfileira a busca+
+// impressão do desenho técnico de TODOS os itens da caixa que batem
+// com o padrão de código (ver PADRAO_CODIGO_DESENHO), de novo. Só
+// existe pra Produção (é o único perfil cujos itens têm desenho
+// técnico) — clicar em "🧾 Romaneio" de novo (reimpressão) não reenvia
+// os desenhos, só o PDF do romaneio em si. Ação manual e explícita:
+// reimprime mesmo que o desenho daquele item já tenha sido impresso
+// com sucesso antes.
+router.post('/:id/reimprimir-desenhos', auth, async (req, res) => {
+  try {
+    if (req.usuario?.perfil !== 'producao') {
+      return res.status(403).json({ erro: 'Acesso restrito ao perfil Produção.' });
+    }
+
+    const [[caixa]] = await db.query('SELECT id FROM caixas WHERE id = ?', [req.params.id]);
+    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+
+    const [itens] = await db.query(
+      'SELECT id, codigo_item FROM caixa_itens WHERE caixa_id = ?',
+      [caixa.id]
+    );
+
+    let enfileirados = 0;
+    for (const item of itens) {
+      const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
+      if (ok) enfileirados++;
+    }
+
+    res.json({ enfileirados, total_itens: itens.length });
+  } catch (err) {
+    console.error('[POST /caixas/:id/reimprimir-desenhos]', err.message);
+    res.status(500).json({ erro: 'Erro ao reenfileirar desenhos técnicos.' });
   }
 });
 

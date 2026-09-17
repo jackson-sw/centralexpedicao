@@ -1,14 +1,15 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { montarPdfRomaneioProducao } = require('../services/romaneioProducao');
+const { montarPdfRomaneioCaixa } = require('../services/romaneioCaixa');
 
-// Fila de impressão automática do romaneio de Produção numa impressora
-// a laser (papel A4) — não confundir com backend/routes/etiquetas.js
-// (etiqueta da caixa, Argox, 100x70mm). Roda no MESMO computador-ponte
-// do perfil Almoxarifado (ver print-agent/), só que numa impressora
-// diferente (IMPRESSORA_ROMANEIO_NOME). O job é criado automaticamente
-// dentro de POST /api/romaneios-producao/:id/romaneio, junto com o
-// envio por e-mail — não existe uma rota pública pra enfileirar aqui.
+// Fila de impressão automática do romaneio de uma caixa do perfil
+// Produção, numa impressora a laser (papel A4) — não confundir com
+// backend/routes/etiquetas.js (etiqueta da caixa, Argox, 100x70mm).
+// Roda no MESMO computador-ponte do perfil Almoxarifado (ver
+// print-agent/), só que numa impressora diferente (IMPRESSORA_ROMANEIO_NOME).
+// O job é criado automaticamente dentro de POST /api/caixas/:id/romaneio
+// quando a caixa foi criada pelo perfil Produção, junto com o envio
+// por e-mail — não existe uma rota pública pra enfileirar aqui.
 
 // Bloqueio: só o agente de impressão local (o mesmo de
 // backend/routes/etiquetas.js, rodando no computador-ponte) pode
@@ -26,8 +27,8 @@ function apenasAgente(req, res, next) {
 router.get('/pendentes', apenasAgente, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, romaneio_id, impressora, criado_em
-       FROM romaneio_producao_impressao_fila
+      `SELECT id, caixa_id, impressora, criado_em
+       FROM romaneio_impressao_fila
        WHERE status = 'pendente'
        ORDER BY criado_em ASC
        LIMIT 50`
@@ -43,14 +44,14 @@ router.get('/pendentes', apenasAgente, async (req, res) => {
 // romaneio (A4) pra mandar direto pra impressora a laser.
 router.get('/:id/pdf', apenasAgente, async (req, res) => {
   try {
-    const [[job]] = await db.query('SELECT * FROM romaneio_producao_impressao_fila WHERE id = ?', [req.params.id]);
+    const [[job]] = await db.query('SELECT * FROM romaneio_impressao_fila WHERE id = ?', [req.params.id]);
     if (!job) return res.status(404).json({ erro: 'Job de impressão não encontrado.' });
 
-    const dados = await montarPdfRomaneioProducao(job.romaneio_id);
-    if (!dados) return res.status(404).json({ erro: 'Romaneio não encontrado.' });
+    const dados = await montarPdfRomaneioCaixa(job.caixa_id);
+    if (!dados) return res.status(404).json({ erro: 'Caixa não encontrada.' });
 
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="romaneio-${dados.romaneio.codigo || dados.romaneio.id}.pdf"`);
+    res.set('Content-Disposition', `inline; filename="romaneio-${dados.caixa.codigo_barras || dados.caixa.id}.pdf"`);
     res.send(dados.pdfBuffer);
   } catch (err) {
     console.error('[GET /romaneio-impressao/:id/pdf]', err.message);
@@ -61,7 +62,7 @@ router.get('/:id/pdf', apenasAgente, async (req, res) => {
 // POST /api/romaneio-impressao/:id/concluido — agente confirma que imprimiu.
 router.post('/:id/concluido', apenasAgente, async (req, res) => {
   try {
-    await db.query(`UPDATE romaneio_producao_impressao_fila SET status = 'impresso', impresso_em = NOW() WHERE id = ?`, [req.params.id]);
+    await db.query(`UPDATE romaneio_impressao_fila SET status = 'impresso', impresso_em = NOW() WHERE id = ?`, [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[POST /romaneio-impressao/:id/concluido]', err.message);
@@ -74,7 +75,7 @@ router.post('/:id/concluido', apenasAgente, async (req, res) => {
 router.post('/:id/erro', apenasAgente, async (req, res) => {
   try {
     const msg = String(req.body?.erro || 'Erro desconhecido').slice(0, 300);
-    await db.query(`UPDATE romaneio_producao_impressao_fila SET status = 'erro', erro_msg = ? WHERE id = ?`, [msg, req.params.id]);
+    await db.query(`UPDATE romaneio_impressao_fila SET status = 'erro', erro_msg = ? WHERE id = ?`, [msg, req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[POST /romaneio-impressao/:id/erro]', err.message);

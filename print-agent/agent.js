@@ -2,13 +2,13 @@
 //
 // Roda neste computador (o "computador-ponte"), ligado por USB/rede às
 // impressoras físicas: as duas Argox OS-214 Plus (etiqueta de caixa,
-// uma do Almoxarifado, outra da Expedição) e a impressora a laser
-// (romaneio de Produção, papel A4) — todas no MESMO computador. O
-// backend fica na nuvem e não enxerga essas impressoras diretamente —
-// por isso ele só ENFILEIRA os pedidos (tabelas etiqueta_fila e
-// romaneio_producao_impressao_fila); este agente é quem, de tempos em
-// tempos, busca as duas filas, baixa o PDF já pronto e manda pra
-// impressora certa.
+// uma do Almoxarifado/Produção — mesma fila — outra da Expedição) e
+// uma impressora a laser comum (papel A4, romaneio das caixas do
+// perfil Produção) — todas no MESMO computador. O backend fica na
+// nuvem e não enxerga essas impressoras diretamente — por isso ele só
+// ENFILEIRA os pedidos (tabelas etiqueta_fila e romaneio_impressao_fila);
+// este agente é quem, de tempos em tempos, busca as filas, baixa o PDF
+// já pronto e manda pra impressora certa.
 //
 // Não precisa de print server nem de diálogo de impressão — usa o
 // pacote pdf-to-printer (que já vem com o SumatraPDF embutido) para
@@ -44,9 +44,9 @@ function log(...args) {
 //   scale:"noscale" (a etiqueta já vem no tamanho exato, não deixa o
 //   SumatraPDF "encaixar" em outro papel) e orientation:"landscape"
 //   (o PDF é mais largo que alto).
-// - romaneio: romaneio de Produção (A4, impressora a laser comum) —
-//   sem opções especiais, deixa o SumatraPDF ajustar à página/papel
-//   padrão da impressora (o PDF já é gerado em A4).
+// - romaneio: romaneio das caixas do perfil Produção (A4, impressora
+//   a laser comum) — sem opções especiais, deixa o SumatraPDF ajustar
+//   ao papel A4 configurado no driver da laser.
 const FILAS = [
   {
     nome: 'etiqueta',
@@ -58,7 +58,7 @@ const FILAS = [
     nome: 'romaneio',
     base: '/api/romaneio-impressao',
     printOptions: {},
-    descricaoJob: (job) => `romaneio #${job.id} (romaneio de produção ${job.romaneio_id})`,
+    descricaoJob: (job) => `romaneio #${job.id} (caixa ${job.caixa_id})`,
   },
 ];
 

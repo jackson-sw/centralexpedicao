@@ -585,7 +585,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mf">
       <button class="btn btn-out" onclick="fecharResultadoCaixa()">Concluir</button>
       <button class="btn btn-blue" id="btn-imprimir-etiqueta-resultado" onclick="imprimirEtiquetaCaixa()">🖨️ Imprimir Etiqueta</button>
-      <button class="btn btn-blue" id="btn-gerar-romaneio-resultado" style="display:none" onclick="gerarRomaneioResultado()">🧾 Gerar Romaneio</button>
     </div>
   </div>
 </div>
@@ -690,22 +689,18 @@ function preencherOpcoesResponsavel(selectId) {
     + nomes.map((n) => `<option>${escapeHtml(n)}</option>`).join('');
 }
 
-// Produção tem sua PRÓPRIA estrutura no backend (romaneios_producao,
-// não caixas/caixa_itens — ver backend/routes/romaneiosProducao.js),
-// numeração própria (PROD-00001, ...) e não gera etiqueta. A tela
-// (modais "Nova Caixa"/"Alterar Caixa" etc.) continua compartilhada
-// com Almoxarifado por conveniência — estas duas funções decidem, em
-// tempo de execução, qual endpoint chamar e qual rótulo mostrar.
+// Produção usa a MESMA tabela/backend de Almoxarifado e Expedição
+// (backend/routes/caixas.js) — nenhuma diferença de endpoint aqui.
+// Estas funções continuam existindo só pra não espalhar strings soltas
+// pelo resto do arquivo.
 function apiBaseCaixaAtual() {
-  return PERFIL === 'producao' ? '/romaneios-producao' : '/caixas';
+  return '/caixas';
 }
 function rotuloItemCaixaAtual() {
-  return PERFIL === 'producao' ? 'Romaneio' : 'Caixa';
+  return 'Caixa';
 }
-// Código gerado ao finalizar — caixas usam "codigo_barras" (etiqueta
-// física), romaneios de Produção usam "codigo" (só identificação).
 function codigoDoItemCaixa(c) {
-  return (c && (c.codigo_barras || c.codigo)) || null;
+  return (c && c.codigo_barras) || null;
 }
 
 let itensAtuais = [];
@@ -823,22 +818,16 @@ function boot() {
     carregarCaixas('lista-caixas');
     pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); }, 25000);
   } else if (PERFIL === 'almoxarifado' || PERFIL === 'producao') {
-    // Produção reaproveita a MESMA tela do Almoxarifado por
-    // conveniência (modais, listagem), mas fala com um backend
-    // totalmente separado (tabelas romaneios_producao, numeração
-    // PROD-00001, sem etiqueta — ver apiBaseCaixaAtual/
-    // rotuloItemCaixaAtual e backend/routes/romaneiosProducao.js).
+    // Produção reaproveita a MESMA tela e o MESMO backend do
+    // Almoxarifado (tabelas caixas/caixa_itens, numeração CXxxxxxx,
+    // etiqueta na mesma impressora) — só muda a equipe de responsáveis
+    // (ver RESPONSAVEIS_POR_PERFIL) e o crachá do cabeçalho. A única
+    // diferença funcional é a impressão automática de desenho técnico
+    // (ver botão "📐 Reimprimir Desenhos" em renderFooterCaixaDetalhe).
     const ehProducao = PERFIL === 'producao';
     roleEl.textContent = ehProducao ? 'Produção' : 'Almoxarifado';
     roleEl.className = ehProducao ? 'hrole r-prod' : 'hrole r-almox';
     document.getElementById('view-almoxarifado').style.display = 'block';
-    if (ehProducao) {
-      document.getElementById('lbl-almox-stat-aberto').textContent = 'Romaneios em aberto';
-      document.getElementById('ptitle-almox').textContent = 'Romaneios';
-      document.getElementById('btn-novo-item-almox').textContent = '+ Novo Romaneio';
-      document.getElementById('fab-novo-item-almox').title = 'Novo Romaneio';
-      document.getElementById('fab-novo-item-almox').setAttribute('aria-label', 'Novo Romaneio');
-    }
     carregarCaixas('lista-caixas-almox');
     pollTimer = setInterval(() => carregarCaixas('lista-caixas-almox'), 25000);
   } else if (PERFIL === 'expedicao_administrativo') {
@@ -1236,9 +1225,9 @@ function renderCaixas(lista, targetId = 'lista-caixas') {
 }
 
 function labelStatusCaixa(status) {
-  if (status === 'aberta' || status === 'aberto')   return PERFIL === 'producao' ? 'Aberto' : 'Aberta';
+  if (status === 'aberta')   return 'Aberta';
   if (status === 'expedida') return 'Expedida';
-  return PERFIL === 'producao' ? 'Fechado' : 'Fechada';
+  return 'Fechada';
 }
 
 async function verDetalheCaixa(id) {
@@ -1246,7 +1235,7 @@ async function verDetalheCaixa(id) {
     const c = await api('GET', apiBaseCaixaAtual() + '/' + id);
     const rotulo = rotuloItemCaixaAtual();
     document.getElementById('det2-titulo').textContent = codigoDoItemCaixa(c) || (rotulo + ' #' + c.id);
-    document.getElementById('det2-sub').textContent = labelStatusCaixa(c.status) + (PERFIL === 'producao' ? ' · aberto em ' : ' · aberta em ') + fmtDT(c.criado_em) +
+    document.getElementById('det2-sub').textContent = labelStatusCaixa(c.status) + ' · aberta em ' + fmtDT(c.criado_em) +
       (c.fechado_em ? ' · finalizada em ' + fmtDT(c.fechado_em) : '');
     document.getElementById('det2-body').innerHTML = `
       <div class="fg"><label>Itens (${c.itens.length})</label></div>
@@ -1277,13 +1266,14 @@ function renderFooterCaixaDetalhe(c) {
   // Expedição (que agora também monta caixa, ver btn-nova-caixa-exp em
   // boot() e apenasMontagemCaixa no backend) e Produção (mesma tela do
   // Almoxarifado).
-  if ((PERFIL === 'almoxarifado' || PERFIL === 'expedicao' || PERFIL === 'producao') && (c.status === 'aberta' || c.status === 'aberto')) {
+  if ((PERFIL === 'almoxarifado' || PERFIL === 'expedicao' || PERFIL === 'producao') && c.status === 'aberta') {
     botoes += `<button class="btn btn-out" onclick="abrirAlterarCaixa(${c.id})">✏️ Alterar</button>`;
     botoes += `<button class="btn btn-blue" onclick="finalizarCaixa(${c.id})">✅ Finalizar</button>`;
   }
-  if (c.status !== 'aberta' && c.status !== 'aberto') {
-    // Só Almoxarifado e Expedição têm impressora Argox configurada
-    // (ver permiteImprimirEtiqueta) — os demais perfis só veem Romaneio.
+  if (c.status !== 'aberta') {
+    // Só Almoxarifado, Expedição e Produção têm impressora Argox
+    // configurada (ver permiteImprimirEtiqueta) — os demais perfis só
+    // veem Romaneio.
     if (permiteImprimirEtiqueta()) {
       botoes += `<button class="btn btn-out" id="btn-reimprimir-${c.id}" onclick="reimprimirEtiquetaCaixa(${c.id})">🖨️ Reimprimir</button>`;
     }
@@ -1320,16 +1310,13 @@ function abrirNovaCaixa() {
   document.getElementById('cx-projeto').disabled = false;
   document.getElementById('cx-obs').value = '';
   document.getElementById('cx-obs').disabled = false;
-  // Produção tem seu próprio texto/título aqui pra não confundir (mesma
-  // tela do Almoxarifado, ver boot()) — os demais perfis mantêm o texto
-  // original. Sem "etiqueta impressa" no placeholder do projeto porque
-  // Produção não gera etiqueta (só romaneio).
-  const ehProducao = PERFIL === 'producao';
-  document.getElementById('mo-caixa-titulo').textContent = ehProducao ? '🧾 Novo Romaneio' : '🧰 Nova Caixa';
-  document.getElementById('cx-projeto').placeholder = ehProducao ? 'Opcional' : 'Opcional — aparece na etiqueta impressa';
-  document.getElementById('cx-subtitulo').textContent = ehProducao
-    ? 'Produção → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.'
-    : 'Almoxarifado → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
+  // Produção agora é idêntico a Almoxarifado (mesma tabela, mesma
+  // etiqueta) — só o texto do subtítulo muda pra indicar de onde saem
+  // os itens.
+  document.getElementById('mo-caixa-titulo').textContent = '🧰 Nova Caixa';
+  document.getElementById('cx-projeto').placeholder = 'Opcional — aparece na etiqueta impressa';
+  document.getElementById('cx-subtitulo').textContent = (PERFIL === 'producao' ? 'Produção' : 'Almoxarifado')
+    + ' → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
   document.getElementById('btn-cancelar-caixa').textContent = 'Cancelar';
   caixaEmCriacaoId = null;
   caixaItensAtuais = [{ codigo_item: '', descricao: '', quantidade: 1 }];
@@ -1723,14 +1710,11 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
       try { const data = await resp.json(); msg = data.erro || msg; } catch {}
       throw new Error(msg);
     }
-    // X-Email-Enviado existe em todos os romaneios; X-Impressao-Enfileirada
-    // só existe no romaneio de Produção (por enquanto) — por isso checa
-    // "!== null" em vez de assumir presente, senão trataria a ausência
-    // como falha de impressão nos outros tipos de romaneio.
     const emailHeader = resp.headers.get('X-Email-Enviado');
     const emailErro = resp.headers.get('X-Email-Erro');
     const impressaoHeader = resp.headers.get('X-Impressao-Enfileirada');
     const impressaoErro = resp.headers.get('X-Impressao-Erro');
+    const desenhosHeader = resp.headers.get('X-Desenhos-Enfileirados');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1748,10 +1732,14 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
       else { partes.push('o e-mail falhou' + (emailErro ? ': ' + emailErro : '')); houveFalha = true; }
     }
     if (impressaoHeader !== null) {
-      if (impressaoHeader === 'true') partes.push('enviado para impressão');
+      if (impressaoHeader === 'true') partes.push('enviado para a impressora');
       else { partes.push('a impressão falhou' + (impressaoErro ? ': ' + impressaoErro : '')); houveFalha = true; }
     }
-    toast('Romaneio gerado' + (partes.length ? ', ' + partes.join(' e ') : '') + '.', houveFalha);
+    if (desenhosHeader !== null) {
+      const n = Number(desenhosHeader) || 0;
+      if (n > 0) partes.push(`${n} desenho(s) técnico(s) reenviado(s) para impressão`);
+    }
+    toast('Romaneio gerado' + (partes.length ? ', ' + partes.join(', ') : '') + '.', houveFalha);
   } catch (e) {
     toast(e.message, true);
   } finally {
@@ -1760,39 +1748,23 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
 }
 
 function mostrarResultadoCaixa(codigo) {
-  const ehProducao = PERFIL === 'producao';
+  document.getElementById('resultado-caixa-titulo').textContent = '✅ Caixa fechada com sucesso';
+  document.getElementById('resultado-caixa-sub').textContent = 'Cole a etiqueta na caixa física';
+  document.getElementById('resultado-barcode-bloco').style.display = '';
+  document.getElementById('resultado-caixa-dica').style.display = '';
 
-  // Produção não tem etiqueta/código de barras físico — só o número do
-  // romaneio (PROD-00001) e um botão pra gerar o PDF na hora, sem
-  // depender do detalhe. Almoxarifado/Expedição mantêm o fluxo original
-  // (preview do código de barras + Imprimir Etiqueta).
-  document.getElementById('resultado-caixa-titulo').textContent = ehProducao
-    ? '✅ Romaneio finalizado com sucesso'
-    : '✅ Caixa fechada com sucesso';
-  document.getElementById('resultado-caixa-sub').textContent = ehProducao
-    ? codigo
-    : 'Cole a etiqueta na caixa física';
-  document.getElementById('resultado-barcode-bloco').style.display = ehProducao ? 'none' : '';
-  document.getElementById('resultado-caixa-dica').style.display = ehProducao ? 'none' : '';
-
-  if (!ehProducao) {
-    document.getElementById('barcode-preview-code').textContent = codigo;
-    const projetoEl = document.getElementById('resultado-caixa-projeto');
-    const projeto = ultimaCaixaGerada && ultimaCaixaGerada.numero_projeto;
-    if (projetoEl) {
-      projetoEl.textContent = projeto ? ('Projeto: ' + projeto) : '';
-      projetoEl.style.display = projeto ? '' : 'none';
-    }
-    try {
-      JsBarcode('#barcode-preview', codigo, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 6 });
-    } catch (e) { console.warn('Falha ao gerar código de barras', e); }
+  document.getElementById('barcode-preview-code').textContent = codigo;
+  const projetoEl = document.getElementById('resultado-caixa-projeto');
+  const projeto = ultimaCaixaGerada && ultimaCaixaGerada.numero_projeto;
+  if (projetoEl) {
+    projetoEl.textContent = projeto ? ('Projeto: ' + projeto) : '';
+    projetoEl.style.display = projeto ? '' : 'none';
   }
+  try {
+    JsBarcode('#barcode-preview', codigo, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 6 });
+  } catch (e) { console.warn('Falha ao gerar código de barras', e); }
 
-  // Produção não tem impressora Argox configurada (ver
-  // permiteImprimirEtiqueta) — em vez do botão de imprimir, mostra
-  // direto o de gerar romaneio.
-  document.getElementById('btn-imprimir-etiqueta-resultado').style.display = (!ehProducao && permiteImprimirEtiqueta()) ? '' : 'none';
-  document.getElementById('btn-gerar-romaneio-resultado').style.display = ehProducao ? '' : 'none';
+  document.getElementById('btn-imprimir-etiqueta-resultado').style.display = permiteImprimirEtiqueta() ? '' : 'none';
   abrirModal('mo-caixa-resultado');
 }
 
@@ -1800,19 +1772,13 @@ function fecharResultadoCaixa() {
   fecharModal('mo-caixa-resultado');
 }
 
-// Gera/baixa o romaneio em PDF direto da tela de sucesso do "Finalizar"
-// (só Produção vê este botão — ver mostrarResultadoCaixa).
-async function gerarRomaneioResultado() {
-  if (!ultimaCaixaGerada) return;
-  await gerarRomaneio(ultimaCaixaGerada.id, 'btn-gerar-romaneio-resultado');
-}
-
-// Só Almoxarifado e Expedição têm impressora Argox configurada no
-// servidor (ver backend/routes/etiquetas.js) — os outros perfis
-// (Em Campo, Expedição Administrativo e, por enquanto, Produção) nem
-// veem o botão de imprimir/reimprimir etiqueta.
+// Almoxarifado, Expedição e Produção têm impressora Argox configurada
+// no servidor (ver backend/routes/etiquetas.js — Produção usa a mesma
+// fila/impressora do Almoxarifado). Os outros perfis (Em Campo,
+// Expedição Administrativo) nem veem o botão de imprimir/reimprimir
+// etiqueta.
 function permiteImprimirEtiqueta() {
-  return PERFIL === 'almoxarifado' || PERFIL === 'expedicao';
+  return PERFIL === 'almoxarifado' || PERFIL === 'expedicao' || PERFIL === 'producao';
 }
 
 function imprimirEtiquetaCaixa() {
