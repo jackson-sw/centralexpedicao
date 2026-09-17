@@ -9,6 +9,7 @@ const carregamentosRoutes    = require('./routes/carregamentos');
 const caixasRoutes           = require('./routes/caixas');
 const romaneiosProducaoRoutes = require('./routes/romaneiosProducao');
 const romaneioImpressaoRoutes = require('./routes/romaneioImpressao');
+const desenhosTecnicosRoutes  = require('./routes/desenhosTecnicos');
 const itensMateriaisRoutes   = require('./routes/itensMateriais');
 const etiquetasRoutes        = require('./routes/etiquetas');
 const { verificarConexao } = require('./mail');
@@ -50,6 +51,7 @@ app.use('/api/carregamentos',  carregamentosRoutes);
 app.use('/api/caixas',         caixasRoutes);
 app.use('/api/romaneios-producao', romaneiosProducaoRoutes);
 app.use('/api/romaneio-impressao', romaneioImpressaoRoutes);
+app.use('/api/desenhos-tecnicos', desenhosTecnicosRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);
 app.use('/api/etiquetas',      etiquetasRoutes);
 

@@ -39,3 +39,4 @@ Thumbs.db
 
 # Scripts locais de conveniência (específicos do computador-ponte, não versionar)
 print-agent/iniciar.bat
+desenho-agent/iniciar.bat

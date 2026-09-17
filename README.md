@@ -11,6 +11,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
 - `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta e à laser do romaneio de Produção — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios).
+- `desenho-agent/` — script Node independente, roda numa máquina da rede interna com acesso ao servidor de arquivos on-premises, busca e imprime o desenho técnico de itens de estrutura lidos no romaneio de Produção — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico).
 
 O backend serve o frontend estaticamente — em produção tudo roda em um único processo Node em uma única porta.
 
@@ -71,6 +72,7 @@ O perfil **Produção** monta seus próprios "romaneios" numa estrutura **totalm
 - Fluxo igual ao de caixas fora isso: **Salvar** (aberto, sem código) → **Alterar** (mais itens, de um ou mais responsáveis) → **Finalizar** (gera o código `PROD-xxxxx`) → **Romaneio** (PDF + e-mail para `ROMANEIO_PRODUCAO_EMAIL_TO` + impressão automática numa laser A4 — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios)).
 - Responsáveis próprios (`PRODUCAO_RESPONSAVEIS`, em `backend/constants.js`): **Diego Alves**, **Claudemir Miranda** e **Jânio Bauer**.
 - Como os romaneios de Produção não têm código de barras, eles **não** podem ser lidos/expandidos dentro de um "Novo Carregamento" (isso só funciona para caixas do Almoxarifado/Expedição).
+- Cada item lido cujo código bate com o padrão de estrutura de engenharia (`NNNNNN-LLLddd`, ex.: `250013-DGA109`) dispara também a busca e impressão automática do desenho técnico correspondente — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico).
 
 ## Fluxo de desembarque
 
@@ -95,6 +97,22 @@ Como o backend fica hospedado numa VPS na nuvem e não tem acesso direto às imp
 As rotas `/api/etiquetas/pendentes`, `/api/etiquetas/:id/pdf`, `/api/etiquetas/:id/concluido`, `/api/etiquetas/:id/erro` e as equivalentes em `/api/romaneio-impressao/*` não usam o JWT dos perfis — são autenticadas por uma chave fixa (`AGENT_API_KEY`, header `X-Agent-Key`) compartilhada apenas entre o servidor e o agente local, já que ele não é uma pessoa logada no app.
 
 Se `IMPRESSORA_ROMANEIO_NOME` não estiver configurado no servidor, o romaneio de Produção continua sendo gerado, baixado e enviado por e-mail normalmente — só a impressão automática fica pulada (com aviso no toast do app e no log do servidor).
+
+## Impressão automática de desenho técnico
+
+Cada item lido/adicionado num romaneio de Produção cujo código bate com o padrão **`NNNNNN-LLLddd`** (6 dígitos do número do projeto + hífen + 3 letras da estrutura + número da peça — ex.: `250013-DGA109`, onde `DGA` = Dutos de Gases e Ar) dispara a busca automática do desenho técnico (PDF) correspondente no servidor de arquivos on-premises, e imprime todas as páginas dele numa impressora a laser. Itens que não batem com esse padrão (parafuso, material avulso, etc.) são ignorados silenciosamente — não é todo item que tem desenho técnico.
+
+Este fluxo é **diferente** do de etiqueta/romaneio: o backend não gera nem guarda o PDF do desenho — ele só sabe que existe um pedido de busca. Quem faz o trabalho pesado é um agente novo e independente, o `desenho-agent/`:
+
+1. **Servidor** — sempre que um item é salvo/alterado em `POST /api/romaneios-producao` (criar), `POST /api/romaneios-producao/:id/itens` (alterar) ou `PUT /api/romaneios-producao/:romaneioId/itens/:itemId` (editar), o `codigo_item` é testado contra o padrão acima; se bater, grava um pedido pendente na tabela `desenho_tecnico_impressao_fila` (projeto + estrutura extraídos do código).
+2. **`desenho-agent/`** — script Node independente, rodando numa máquina da rede interna que enxerga o servidor de arquivos (`PASTA_PROJETOS`, ex.: `D:\Engenharia\0 - Engenharia do Produto\02 - Projetos\`) **e também** a impressora a laser (a mesma do romaneio de Produção, compartilhada na rede — pode ter um nome diferente nesta máquina, configurado em `IMPRESSORA_DESENHOS_NOME`). A cada poucos segundos ele consulta `GET /api/desenhos-tecnicos/pendentes` e, pra cada pedido:
+   - Procura, dentro de `PASTA_PROJETOS`, a subpasta que **começa** com o número do projeto (ex.: `250013-HRS02510T - Frivatti` — o resto do nome não é previsível a partir do código, por isso a busca é por prefixo, não por nome exato).
+   - Dentro dela, procura a subpasta que **começa** com as 3 letras da estrutura (ex.: `DGA - Dutos de Gases e Ar`).
+   - Dentro dela, procura o `.pdf` cujo nome contenha o projeto e o código completo da estrutura, terminando em `-R<número>.pdf` (ex.: `250013-HRS02510T-DGA109-R00.pdf`); se houver mais de uma revisão, imprime sempre a mais alta.
+   - Imprime o PDF encontrado (todas as páginas) direto na impressora, sem passar pelo backend, e reporta sucesso/erro de volta pra `POST /api/desenhos-tecnicos/:id/concluido` ou `:id/erro`.
+3. Se qualquer passo falhar (pasta não encontrada, mais de uma pasta batendo com o prefixo — tratado como erro pra não arriscar imprimir o desenho errado —, arquivo não encontrado), o pedido fica marcado como erro na fila e o agente segue pro próximo; isso nunca trava o salvamento do item nem o romaneio.
+
+Ver `desenho-agent/README.md` para instalação e configuração para iniciar junto com o Windows.
 
 ## Painel Administrativo (`/admin`)
 
@@ -205,7 +223,7 @@ A tela de histórico do perfil Expedição atualiza automaticamente a cada 25 se
 
 `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `EXPEDICAO_PASSWORD_HASH`, `EM_CAMPO_PASSWORD_HASH`, `ALMOXARIFADO_PASSWORD_HASH`, `PRODUCAO_PASSWORD_HASH`, `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`, `ROMANEIO_CAIXA_EMAIL_TO`, `ROMANEIO_PRODUCAO_EMAIL_TO`, `ROMANEIO_CARREGAMENTO_EMAIL_TO`, `IMPRESSORA_ALMOXARIFADO_NOME`, `IMPRESSORA_EXPEDICAO_NOME`, `IMPRESSORA_ROMANEIO_NOME`, `AGENT_API_KEY`, `ERP_DB_HOST`, `ERP_DB_PORT`, `ERP_DB_NAME`, `ERP_DB_USER`, `ERP_DB_PASSWORD`, `ERP_DB_ENCRYPT` — ver `backend/.env.example`.
 
-As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas e do romaneio de Produção — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios).
+As configurações SMTP em `backend/mail.js` são usadas para enviar automaticamente o romaneio (PDF) ao finalizar uma caixa — ver [Fluxo de caixas](#fluxo-de-caixas). As configurações `ERP_DB_*` conectam ao banco do ERP para o catálogo de itens — ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp). As configurações `IMPRESSORA_*`/`AGENT_API_KEY` são usadas pela impressão automática de etiquetas e do romaneio de Produção — ver [Impressão de etiquetas e romaneios](#impressão-de-etiquetas-e-romaneios). O mesmo `AGENT_API_KEY` também autentica o `desenho-agent/` — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico) (esse agente tem seu próprio `.env`, com `PASTA_PROJETOS` e `IMPRESSORA_DESENHOS_NOME` — não ficam no `.env` do backend).
 
 ## Atualizando um banco já existente
 
@@ -220,6 +238,7 @@ mysql -u root -p burntech_expedicao < alter_carregamentos_perfil_expedicao_admin
 mysql -u root -p burntech_expedicao < alter_etiqueta_fila.sql  # fila de impressão de etiquetas (Argox)
 mysql -u root -p burntech_expedicao < alter_caixas_perfil_producao.sql  # cria romaneios_producao/romaneio_producao_itens (perfil Produção — tabela própria, não caixas)
 mysql -u root -p burntech_expedicao < alter_romaneio_producao_impressao.sql  # fila de impressão automática do romaneio de Produção (laser A4)
+mysql -u root -p burntech_expedicao < alter_desenho_tecnico_impressao.sql  # fila de busca/impressão automática do desenho técnico
 ```
 
 ## Próximos passos (fora do escopo desta primeira versão)

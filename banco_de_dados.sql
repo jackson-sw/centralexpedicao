@@ -156,6 +156,37 @@ CREATE TABLE romaneio_producao_itens (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Tabela: desenho_tecnico_impressao_fila
+-- Fila de busca + impressão automática do desenho técnico (PDF) de um
+-- item lido no romaneio de Produção — só quando o código do item bate
+-- com o padrão "NNNNNN-LLLddd" (6 dígitos do projeto + hífen + 3
+-- letras da estrutura + número), ex.: "250013-DGA109". Diferente das
+-- outras filas de impressão, o backend NÃO gera o PDF aqui — quem
+-- busca o arquivo (no servidor de arquivos on-premises,
+-- D:\Engenharia\...) e imprime é o desenho-agent/, direto, sem passar
+-- o arquivo por aqui. Esta tabela só registra o pedido e o resultado
+-- (impresso ou não encontrado/erro).
+-- ------------------------------------------------------------
+CREATE TABLE desenho_tecnico_impressao_fila (
+  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  romaneio_item_id  INT UNSIGNED NOT NULL,
+  codigo_item       VARCHAR(100) NOT NULL,
+  projeto           VARCHAR(10)  NOT NULL,
+  estrutura         VARCHAR(20)  NOT NULL,
+  status            ENUM('pendente', 'impresso', 'erro') NOT NULL DEFAULT 'pendente',
+  erro_msg          VARCHAR(300) NULL,
+  criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  concluido_em      DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_desenho_tecnico_impressao_fila_status (status),
+  KEY idx_desenho_tecnico_impressao_fila_item (romaneio_item_id),
+  CONSTRAINT fk_desenho_tecnico_impressao_fila_item
+    FOREIGN KEY (romaneio_item_id) REFERENCES romaneio_producao_itens(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Tabela: etiqueta_fila
 -- Fila de impressão física da etiqueta da caixa (impressoras Argox,
 -- uma por perfil — Almoxarifado e Expedição). O app só enfileira

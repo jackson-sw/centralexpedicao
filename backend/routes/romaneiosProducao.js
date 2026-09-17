@@ -16,6 +16,31 @@ function responsavelValido(nome) {
   return typeof nome === 'string' && PRODUCAO_RESPONSAVEIS.includes(nome.trim());
 }
 
+// Reconhece códigos de item no formato "NNNNNN-LLLddd" — 6 dígitos do
+// número do projeto, hífen, 3 letras da estrutura + número da peça
+// (ex.: "250013-DGA109"). Itens que não batem com isso (parafuso,
+// material avulso, etc.) simplesmente não têm desenho técnico pra
+// buscar — ver desenho-agent/.
+const PADRAO_CODIGO_DESENHO = /^(\d{6})-([A-Za-z]{3}\d+)$/;
+
+// Enfileira a busca+impressão automática do desenho técnico (PDF) de
+// um item recém-salvo/editado, só quando o código bate com o padrão
+// acima. Best-effort: nunca lança erro pra fora — uma falha aqui não
+// pode derrubar o salvamento do item em si.
+async function enfileirarDesenhoTecnicoSeAplicavel(romaneioItemId, codigoItem) {
+  const match = PADRAO_CODIGO_DESENHO.exec((codigoItem || '').trim());
+  if (!match) return;
+  const [, projeto, estrutura] = match;
+  try {
+    await db.query(
+      `INSERT INTO desenho_tecnico_impressao_fila (romaneio_item_id, codigo_item, projeto, estrutura) VALUES (?, ?, ?, ?)`,
+      [romaneioItemId, codigoItem.trim(), projeto, estrutura.toUpperCase()]
+    );
+  } catch (err) {
+    console.error('[desenho-tecnico] falha ao enfileirar busca para item', romaneioItemId, ':', err.message);
+  }
+}
+
 // GET /api/romaneios-producao — histórico (mais recentes primeiro)
 router.get('/', auth, apenasProducao, async (req, res) => {
   try {
@@ -107,6 +132,12 @@ router.post('/', auth, apenasProducao, async (req, res) => {
       conn.release();
     }
 
+    // Só depois do commit — a fila referencia romaneio_producao_itens
+    // por FK, a linha precisa existir de verdade no banco.
+    for (let i = 0; i < itens.length; i++) {
+      await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+    }
+
     res.status(201).json({ id: romaneioId, status: 'aberto', itens_ids: itensIds, mensagem: 'Romaneio salvo. Use "Finalizar" quando estiver pronto.' });
   } catch (err) {
     console.error('[POST /romaneios-producao]', err.message);
@@ -168,6 +199,10 @@ router.post('/:id/itens', auth, apenasProducao, async (req, res) => {
       conn.release();
     }
 
+    for (let i = 0; i < itens.length; i++) {
+      await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+    }
+
     res.json({ itens_ids: itensIds, mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} por ${responsavel_nome}.` });
   } catch (err) {
     console.error('[POST /romaneios-producao/:id/itens]', err.message);
@@ -190,11 +225,23 @@ router.put('/:romaneioId/itens/:itemId', auth, apenasProducao, async (req, res) 
       return res.status(409).json({ erro: 'Este romaneio já foi finalizado e não aceita alterações.' });
     }
 
+    const [[itemAntes]] = await db.query(
+      'SELECT codigo_item FROM romaneio_producao_itens WHERE id = ? AND romaneio_id = ?',
+      [req.params.itemId, romaneio.id]
+    );
+
     const [result] = await db.query(
       'UPDATE romaneio_producao_itens SET codigo_item = ?, descricao = ?, quantidade = ? WHERE id = ? AND romaneio_id = ?',
       [codigo_item, descricao, quantidade, req.params.itemId, romaneio.id]
     );
     if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a este romaneio.' });
+
+    // Só reenfileira a busca do desenho se o código realmente mudou
+    // nesta edição — senão toda correção de descrição/quantidade (sem
+    // mexer no código) reimprimiria o mesmo desenho de novo.
+    if (!itemAntes || itemAntes.codigo_item.trim() !== codigo_item.trim()) {
+      await enfileirarDesenhoTecnicoSeAplicavel(Number(req.params.itemId), codigo_item);
+    }
 
     res.json({ id: Number(req.params.itemId), mensagem: 'Item atualizado.' });
   } catch (err) {
