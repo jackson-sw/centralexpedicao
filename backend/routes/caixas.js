@@ -22,7 +22,11 @@ function responsavelValido(nome, perfil) {
 // (estrutura de engenharia) — os demais perfis usam código de
 // material do ERP, que não bate com este padrão. Itens que não batem
 // simplesmente não têm desenho técnico pra buscar — ver desenho-agent/.
-const PADRAO_CODIGO_DESENHO = /^(\d{6})-([A-Za-z]{3}\d+)$/;
+// O terceiro grupo (posição, ex.: "-0463" em "265545-DTV001-0463") é
+// opcional e ignorado aqui — serve só pra consulta de descrição/
+// quantidade no ERP (ver backend/routes/itensMateriais.js), a busca do
+// desenho técnico continua achando a pasta só por projeto+estrutura.
+const PADRAO_CODIGO_DESENHO = /^(\d{6})-([A-Za-z]{3}\d+)(?:-\d+)?$/;
 
 // Enfileira a busca+impressão automática do desenho técnico (PDF) de
 // um item recém-salvo/editado do perfil Produção, só quando o código
@@ -451,10 +455,11 @@ router.post('/:id/romaneio', auth, async (req, res) => {
 // impressão do desenho técnico de TODOS os itens da caixa que batem
 // com o padrão de código (ver PADRAO_CODIGO_DESENHO), de novo. Só
 // existe pra Produção (é o único perfil cujos itens têm desenho
-// técnico) — clicar em "🧾 Romaneio" de novo (reimpressão) não reenvia
-// os desenhos, só o PDF do romaneio em si. Ação manual e explícita:
-// reimprime mesmo que o desenho daquele item já tenha sido impresso
-// com sucesso antes.
+// técnico). Clicar em "🧾 Romaneio" já reenfileira os desenhos da
+// caixa inteira automaticamente (ver POST /:id/romaneio) — este botão
+// serve pra disparar só essa parte isoladamente, sem gerar um novo
+// romaneio: ação manual e explícita, reimprime mesmo que o desenho
+// daquele item já tenha sido impresso com sucesso antes.
 router.post('/:id/reimprimir-desenhos', auth, async (req, res) => {
   try {
     if (req.usuario?.perfil !== 'producao') {

@@ -89,7 +89,7 @@ As rotas de fila (`/api/etiquetas/*` e `/api/romaneio-impressao/*`) não usam o 
 
 ## Impressão automática de desenho técnico
 
-Cada item lido/adicionado numa caixa do perfil Produção cujo código bate com o padrão **`NNNNNN-LLLddd`** (6 dígitos do número do projeto + hífen + 3 letras da estrutura + número da peça — ex.: `250013-DGA109`, onde `DGA` = Dutos de Gases e Ar) dispara a busca automática do desenho técnico (PDF) correspondente no servidor de arquivos on-premises, e imprime todas as páginas dele numa impressora a laser. Itens que não batem com esse padrão (parafuso, material avulso, etc.) são ignorados silenciosamente — não é todo item que tem desenho técnico. Almoxarifado e Expedição nunca disparam essa busca, já que seus itens vêm do catálogo do ERP e não usam esse formato de código.
+Cada item lido/adicionado numa caixa do perfil Produção cujo código bate com o padrão **`NNNNNN-LLLddd`** (6 dígitos do número do projeto + hífen + 3 letras da estrutura + número da peça — ex.: `250013-DGA109`, onde `DGA` = Dutos de Gases e Ar), opcionalmente seguido de `-posição` (ex.: `250013-DGA109-0463`, ver [Catálogo de itens (ERP)](#catálogo-de-itens-erp)), dispara a busca automática do desenho técnico (PDF) correspondente no servidor de arquivos on-premises, e imprime todas as páginas dele numa impressora a laser — a posição, quando presente, é ignorada aqui (só importa pra consulta de descrição/quantidade no ERP). Itens que não batem com esse padrão (parafuso, material avulso, etc.) são ignorados silenciosamente — não é todo item que tem desenho técnico. Almoxarifado e Expedição nunca disparam essa busca, já que seus itens vêm do catálogo do ERP e não usam esse formato de código.
 
 Este fluxo é **diferente** do de etiqueta/romaneio: o backend não gera nem guarda o PDF do desenho — ele só sabe que existe um pedido de busca. Quem faz o trabalho pesado é um agente novo e independente, o `desenho-agent/`:
 
@@ -113,13 +113,40 @@ Consulta do catálogo de itens/materiais (código, descrição, quantidade), com
 
 ## Catálogo de itens (ERP)
 
-O catálogo de itens/materiais não é mais mantido dentro desta aplicação. Toda consulta de item — auto-preenchimento de descrição em Novo Carregamento/Nova Caixa/Alterar Caixa e a listagem do painel admin — é feita **em tempo real** direto no banco do ERP (SQL Server), na tabela `PRO_PRODUTO`:
+O catálogo de itens/materiais não é mais mantido dentro desta aplicação. Toda consulta de item — auto-preenchimento de descrição em Novo Carregamento/Nova Caixa/Alterar Caixa e a listagem do painel admin — é feita **em tempo real** direto no banco do ERP (SQL Server). `GET /api/itens-materiais/codigo/:codigo` (`backend/routes/itensMateriais.js`) decide qual das duas consultas abaixo usar dependendo do formato do código lido:
+
+| Formato do código lido | Exemplo | Consulta |
+|---|---|---|
+| código de catálogo "normal" | `12345` | direto em `PRO_PRODUTO` pelo `PRO_Codigo` |
+| item de estrutura de engenharia **com posição** | `265545-DTV001-0463` | junção `ORD_ORDEM` + `ORD_ORDEMPRVITEM` + `PRO_PRODUTO` (ver abaixo) |
+
+**Consulta direta (código de catálogo normal):**
 
 | Campo do sistema | Coluna no ERP (`PRO_PRODUTO`) |
 |---|---|
 | código | `PRO_Codigo` |
 | descrição | `PRO_Descricao` |
 | quantidade | `PRO_PesoLiquido` |
+
+**Consulta por posição** — a partir da versão em que as etiquetas de item de estrutura passaram a trazer um terceiro número no final (a posição do item dentro da ordem de produção, ex.: `265545-DTV001-0463`), o `PRO_Codigo` sozinho não identifica mais a linha certa: é preciso juntar a ordem de produção (`ORD_ORDEM`) com o item dela (`ORD_ORDEMPRVITEM`) pela posição lida. O código é dividido em duas partes pelo padrão `PADRAO_CODIGO_COM_POSICAO` (`backend/routes/itensMateriais.js`): tudo antes do último hífen vira o "produto" da ordem (`265545-DTV001`), e o que vem depois é a posição (`0463`):
+
+```sql
+SELECT TOP 1
+  RTRIM(oo.ORD_OrdemNumero)     AS codigo,
+  RTRIM(pp.PRO_Descricao)       AS descricao,
+  oi.ORD_OrdemPrvItemQuantidade AS quantidade
+FROM ORD_ORDEM AS oo
+JOIN ORD_ORDEMPRVITEM AS oi
+  ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
+JOIN PRO_PRODUTO AS pp
+  ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
+WHERE RTRIM(oo.ORD_OrdemProduto) = @produto
+  AND TRY_CAST(RTRIM(oi.ORD_OrdemPrvItemPosicao) AS INT) = TRY_CAST(@posicao AS INT)
+```
+
+O programa que gera a etiqueta descarta os zeros à esquerda da posição (ex.: código de barras termina em `-78`, mas no ERP a posição fica gravada como `0078`) — por isso a comparação da posição é numérica (`TRY_CAST ... AS INT`) em vez de texto, pra "78" e "0078" baterem como o mesmo valor. `TRY_CAST` em vez de `CAST` evita que uma posição não-numérica derrube a consulta inteira — nesse caso simplesmente não bate, como esperado.
+
+Esse terceiro número (posição) é só para essa consulta — a busca automática do desenho técnico (ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico)) continua olhando só projeto+estrutura (`PADRAO_CODIGO_DESENHO` aceita a posição no final, mas a ignora), então continua funcionando normalmente tanto com etiquetas antigas (2 partes) quanto com as novas (3 partes, com ou sem zeros à esquerda na posição).
 
 `backend/dbErp.js` mantém uma pool de conexões própria (via `mssql`/Tedious) separada da conexão MySQL principal — essa conexão é somente leitura, a aplicação nunca grava no ERP. As credenciais ficam em `backend/.env` (`ERP_DB_*`, ver abaixo).
 
