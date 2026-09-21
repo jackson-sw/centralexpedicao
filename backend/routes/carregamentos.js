@@ -461,12 +461,18 @@ router.put('/:id/desembarque/itens/:itemId', auth, apenasEmCampo, async (req, re
 // POST /api/carregamentos/:id/desembarque/finalizar — fecha a tela de
 // desembarque (botão "Salvar"). Permite salvar mesmo com itens
 // faltando — nesse caso o status fica "parcial" em vez de "concluido".
+// `observacoes` é opcional (tela pergunta "Deseja incluir observações?"
+// — só manda o campo quando a resposta é "Sim" e o texto não está
+// vazio); quando ausente/vazio, grava NULL, mesmo que um desembarque
+// anterior parcial já tivesse uma observação salva (o texto sempre
+// reflete o que está na tela no momento do "Salvar").
 router.post('/:id/desembarque/finalizar', auth, apenasEmCampo, async (req, res) => {
   try {
     const responsavel_nome = (req.body.responsavel_nome || '').trim();
     if (!responsavel_nome) {
       return res.status(400).json({ erro: 'Informe o responsável pelo desembarque.' });
     }
+    const observacoes = (req.body.observacoes || '').trim() || null;
 
     const [[carregamento]] = await db.query('SELECT id, status FROM carregamentos WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });
@@ -483,9 +489,9 @@ router.post('/:id/desembarque/finalizar', auth, apenasEmCampo, async (req, res) 
 
     await db.query(
       `UPDATE carregamentos
-       SET desembarque_status = ?, desembarque_responsavel = ?, desembarque_em = NOW()
+       SET desembarque_status = ?, desembarque_responsavel = ?, desembarque_em = NOW(), desembarque_observacoes = ?
        WHERE id = ?`,
-      [status, responsavel_nome, req.params.id]
+      [status, responsavel_nome, observacoes, req.params.id]
     );
 
     res.json({

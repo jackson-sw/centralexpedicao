@@ -37,6 +37,12 @@ CREATE TABLE carregamentos (
   desembarque_status       ENUM('pendente', 'parcial', 'concluido') NOT NULL DEFAULT 'pendente',
   desembarque_responsavel  VARCHAR(150) NULL,
   desembarque_em           DATETIME NULL,
+  -- Observações opcionais digitadas pelo perfil Em Campo ao salvar o
+  -- desembarque ("Deseja incluir observações?" → Sim mostra um campo de
+  -- texto livre). TEXT (em vez de VARCHAR) porque o campo é pensado pra
+  -- várias linhas de anotação, não uma frase curta como `observacoes`
+  -- acima (que é preenchido na criação do carregamento, pela Expedição).
+  desembarque_observacoes  TEXT NULL,
   criado_em                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -270,6 +276,7 @@ SELECT
   c.desembarque_status,
   c.desembarque_responsavel,
   c.desembarque_em,
+  c.desembarque_observacoes,
   c.criado_em,
   c.atualizado_em,
   COUNT(ci.id)                                            AS total_itens,
