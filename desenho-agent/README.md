@@ -39,6 +39,36 @@ Diferente do `print-agent/` (etiqueta e romaneio), aqui o backend
 **não gera nem guarda o PDF** — ele só sabe que existe um pedido; quem
 busca o arquivo de verdade e imprime é este agente, sozinho.
 
+### Perfil Pintura — impressão de TODOS os desenhos de uma estrutura
+
+Este mesmo agente também atende o perfil Pintura, que pede a impressão
+de **todos** os desenhos de uma estrutura de uma vez (não um item
+específico) — tela "Imprimir Desenhos", campo "Projeto" no formato
+`NNNNNN-LLLnnn` (ex.: `250492-TCR500`). O agente consulta
+`GET /api/desenhos-tecnicos-lote/pendentes` no mesmo ciclo e, pra cada
+pedido:
+
+1. Acha a pasta do projeto e a pasta da estrutura do mesmo jeito
+   (passos 1 e 2 acima).
+2. Verifica se existe, dentro da pasta da estrutura, mais uma subpasta
+   batizada com o código completo informado (ex.: `TCR-500` dentro de
+   `TCR - Transportador de Correia de Roletes`) — algumas estruturas
+   são divididas em faixas assim, cada subpasta só com os PDFs daquela
+   faixa (`TCR500` a `TCR595`, por exemplo). Se existir, a busca fica
+   restrita a essa subpasta; se não existir, busca direto na pasta da
+   estrutura mesmo.
+3. Varre essa pasta **e todas as suas subpastas** atrás de qualquer
+   `.pdf`, agrupa pelo nome da peça (tudo antes do `-R<número>` final)
+   e fica só com a revisão mais alta de cada uma.
+4. Imprime cada PDF escolhido, em sequência, na mesma impressora
+   (`IMPRESSORA_DESENHOS_NOME`, mesmas opções `scale: "fit"` +
+   `paperSize: "A4"`), e reporta de volta quantos imprimiram com
+   sucesso e quantos falharam.
+
+Se a busca falhar antes de achar qualquer PDF (pasta não encontrada,
+ambígua, pasta vazia), o pedido fica marcado como erro na fila, igual
+ao fluxo de item único.
+
 ## Pré-requisitos
 
 - Windows (o agente usa o SumatraPDF por baixo, via `pdf-to-printer`,
@@ -79,9 +109,13 @@ busca o arquivo de verdade e imprime é este agente, sozinho.
    ```
 
    Se aparecer `Agente de desenho técnico iniciado. Consultando ... a
-   cada 5s.` e nenhum erro, está funcionando. Leia um item com código
-   de estrutura (ex.: `250013-DGA109`) no romaneio de Produção e
-   confirme que o desenho sai na impressora certa.
+   cada 5s.` e nenhum erro, está funcionando. Teste os dois fluxos:
+   - **Produção**: leia um item com código de estrutura (ex.:
+     `250013-DGA109`) no romaneio de Produção e confirme que o desenho
+     sai na impressora certa.
+   - **Pintura**: na tela "Imprimir Desenhos", informe um projeto+
+     estrutura existente (ex.: `250492-TCR500`) e confirme que todos os
+     desenhos daquela estrutura saem na impressora, um atrás do outro.
 
 ## Deixar rodando sempre (sem precisar abrir manualmente)
 
@@ -122,6 +156,16 @@ Windows**.
   caractere, ao nome da impressora como aparece NESTA máquina (pode
   ser diferente do nome visto no computador do Almoxarifado, mesmo
   sendo a mesma impressora física).
+- **"Mais de uma pasta de subpasta da faixa ... encontrada (ambíguo)"**
+  — mesma ideia do erro de ambiguidade acima, só que na subpasta que
+  agrupa uma faixa de peças do perfil Pintura (ex.: duas pastas
+  batendo com o código completo "TCR500"). Ajuste os nomes das pastas
+  duplicadas no servidor de arquivos.
+- **"Nenhum PDF encontrado em ..."** (perfil Pintura) — a pasta da
+  estrutura (ou da subpasta da faixa, se existir uma) não tem nenhum
+  arquivo `.pdf`, nem nas subpastas dela. Confira se o projeto e a
+  estrutura foram digitados certos e se os arquivos realmente estão
+  nessa pasta no servidor.
 - **Desenho saindo cortado/fora do esquadro do papel A4** — o agente já
   manda `scale: "fit"` (encolhe o conteúdo pra caber na página) e
   `paperSize: "A4"` (força a página impressa a ser A4, mesmo que o PDF

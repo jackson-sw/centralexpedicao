@@ -75,6 +75,7 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .r-almox{background:#fef3c7;color:#92400e;border:1px solid #fde68a;}
 .r-prod{background:#dcfce7;color:#166534;border:1px solid #86efac;}
 .r-expadm{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;}
+.r-pint{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;}
 .btn-sair{background:none;border:1px solid var(--border);border-radius:7px;padding:6px 13px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
 .btn-sair:hover{border-color:var(--red);color:var(--red);}
 .wrap{max-width:900px;margin:0 auto;padding:18px 16px calc(90px + var(--safe-bottom));flex:1;width:100%;}
@@ -297,6 +298,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <div class="plabel">Expedição Administrativo</div>
         <div class="psub">Expedição + Em Campo</div>
       </div>
+      <div class="perfil" id="p-pintura" onclick="selPerfil('pintura')">
+        <div class="picon">🎨</div>
+        <div class="plabel">Pintura</div>
+        <div class="psub">Impressão de desenhos</div>
+      </div>
     </div>
 
     <div id="auth-pin" style="display:none;">
@@ -413,6 +419,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       </div>
       <input type="text" class="busca-inp" id="campo-busca" placeholder="🔍 Buscar por número de projeto..." oninput="filtrarCampo()">
       <div id="lista-campo"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+  </div>
+
+  <!-- VIEW PINTURA (Impressão de desenhos técnicos em lote) -->
+  <div id="view-pintura" style="display:none">
+    <div class="wrap">
+      <div class="summary">
+        <span class="ptitle">Desenhos Técnicos</span>
+        <button class="btn btn-blue" id="btn-imprimir-desenhos-pintura" onclick="abrirImprimirDesenhosPintura()">+ Imprimir Desenhos</button>
+      </div>
+      <div class="empty-box">
+        <div class="empty-icon">📐</div>
+        <div class="empty-title">Impressão de desenhos técnicos</div>
+        <div class="empty-sub">Toque em "+ Imprimir Desenhos" e informe o projeto + estrutura (ex.: 250492-TCR500) para buscar e imprimir todos os desenhos daquela estrutura.</div>
+      </div>
+    </div>
+
+    <div class="fab-wrap">
+      <button class="fab" id="fab-imprimir-desenhos-pintura" style="background:linear-gradient(145deg,#2563eb,#1d4ed8)" onclick="abrirImprimirDesenhosPintura()" title="Imprimir Desenhos" aria-label="Imprimir Desenhos">+</button>
     </div>
   </div>
 </div>
@@ -674,6 +699,29 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
   </div>
 </div>
 
+<!-- MODAL: IMPRIMIR DESENHOS (Pintura) -->
+<div class="overlay" id="mo-pintura-desenhos">
+  <div class="modal" style="width:420px">
+    <div class="mh">
+      <div>
+        <div class="mt">📐 Imprimir Desenhos</div>
+        <div class="ms">Busca e imprime todos os desenhos técnicos da estrutura informada.</div>
+      </div>
+      <button class="mx" onclick="fecharModal('mo-pintura-desenhos')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label>Projeto *</label>
+        <input id="pintura-projeto" placeholder="Ex: 250492-TCR500" maxlength="13" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')imprimirDesenhosPintura()">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-out" onclick="fecharModal('mo-pintura-desenhos')">Cancelar</button>
+      <button class="btn btn-blue" id="btn-imprimir-desenhos-pintura-confirmar" onclick="imprimirDesenhosPintura()">📐 Imprimir Desenhos</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -777,6 +825,7 @@ function selPerfil(p) {
   document.getElementById('p-almoxarifado').classList.toggle('on', p === 'almoxarifado');
   document.getElementById('p-producao').classList.toggle('on', p === 'producao');
   document.getElementById('p-expedicao_administrativo').classList.toggle('on', p === 'expedicao_administrativo');
+  document.getElementById('p-pintura').classList.toggle('on', p === 'pintura');
   document.getElementById('auth-pin').style.display = 'block';
   document.getElementById('login-err').textContent = '';
   document.getElementById('pin').value = '';
@@ -859,6 +908,14 @@ function boot() {
     carregarCaixas('lista-caixas');
     carregarCampo();
     pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); carregarCampo(); }, 25000);
+  } else if (PERFIL === 'pintura') {
+    // Perfil enxuto: não monta caixa nem carregamento, só pede a
+    // impressão em lote de todos os desenhos técnicos de uma estrutura
+    // (ver abrirImprimirDesenhosPintura/imprimirDesenhosPintura) —
+    // nenhum carregamento/polling de lista aqui, por enquanto.
+    roleEl.textContent = 'Pintura';
+    roleEl.className = 'hrole r-pint';
+    document.getElementById('view-pintura').style.display = 'block';
   } else {
     roleEl.textContent = 'Em Campo';
     roleEl.className = 'hrole r-campo';
@@ -1212,6 +1269,44 @@ async function gerarRomaneioFaltantes() {
     `romaneio-faltantes-${desembarqueCarregamentoId}.pdf`,
     { responsavel_nome }
   );
+}
+
+// ── PINTURA — IMPRESSÃO DE DESENHOS EM LOTE ────────────
+// Formato do campo "Projeto": projeto (6 dígitos) + hífen + estrutura
+// completa (3 letras + 3 dígitos) — sempre 13 caracteres, ex.:
+// "250492-TCR500". Precisa bater com PADRAO_PROJETO_PINTURA do backend
+// (backend/routes/desenhosTecnicosLote.js) — validar aqui também só
+// evita uma ida ao servidor pra erro óbvio de digitação.
+const PADRAO_PROJETO_PINTURA = /^\d{6}-[A-Za-z]{3}\d{3}$/;
+
+function abrirImprimirDesenhosPintura() {
+  document.getElementById('pintura-projeto').value = '';
+  abrirModal('mo-pintura-desenhos');
+  document.getElementById('pintura-projeto').focus();
+}
+
+// Só enfileira o pedido — quem busca e imprime de verdade é o
+// desenho-agent/, de forma assíncrona (ver POST /api/desenhos-tecnicos-lote
+// e o comentário lá sobre não haver retorno de "quantos foram
+// impressos" nesta chamada).
+async function imprimirDesenhosPintura() {
+  const projeto = document.getElementById('pintura-projeto').value.trim().toUpperCase();
+  if (!PADRAO_PROJETO_PINTURA.test(projeto)) {
+    toast('Informe o projeto no formato NNNNNN-LLLnnn, com 13 caracteres (ex.: 250492-TCR500).', true);
+    return;
+  }
+
+  const btn = document.getElementById('btn-imprimir-desenhos-pintura-confirmar');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    const data = await api('POST', '/desenhos-tecnicos-lote', { projeto });
+    toast(data.mensagem || 'Solicitação enviada.');
+    fecharModal('mo-pintura-desenhos');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '📐 Imprimir Desenhos';
+  }
 }
 
 async function abrirScannerDesembarque() {

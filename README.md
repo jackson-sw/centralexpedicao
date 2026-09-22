@@ -11,7 +11,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 - `banco_de_dados.sql` — DDL completo do MySQL (tabelas + view), executado uma vez para provisionar o banco.
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
 - `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta e à laser do romaneio de Produção — ver [Impressão de etiquetas e romaneio de Produção](#impressão-de-etiquetas-e-romaneio-de-produção).
-- `desenho-agent/` — script Node independente, roda numa máquina da rede interna com acesso ao servidor de arquivos on-premises, busca e imprime o desenho técnico de itens de estrutura lidos numa caixa do perfil Produção — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico).
+- `desenho-agent/` — script Node independente, roda numa máquina da rede interna com acesso ao servidor de arquivos on-premises, busca e imprime o desenho técnico de itens de estrutura lidos numa caixa do perfil Produção — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico) — e também atende o perfil Pintura, que pede a impressão de TODOS os desenhos de uma estrutura de uma vez — ver [Impressão de desenhos em lote (perfil Pintura)](#impressão-de-desenhos-em-lote-perfil-pintura).
 
 O backend serve o frontend estaticamente — em produção tudo roda em um único processo Node em uma única porta.
 
@@ -24,8 +24,9 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 - **Produção** (senha padrão: `Prod#2026`) — **idêntico** ao Almoxarifado (monta, altera e finaliza caixas nas mesmas tabelas `caixas`/`caixa_itens`, mesma numeração `CXxxxxxx`, mesma etiqueta e impressora Argox), só com sua própria lista de responsáveis (ver [Fluxo de caixas](#fluxo-de-caixas) abaixo). A única diferença é que itens lidos no formato de estrutura de engenharia disparam a busca e impressão automática do desenho técnico correspondente — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico).
 - **Em Campo** (senha padrão: `emcampo!26`) — confere o desembarque dos carregamentos no destino (ver [Fluxo de desembarque](#fluxo-de-desembarque) abaixo).
 - **Expedição Administrativo** (senha padrão: `Bioc!@09`) — reúne as telas de Expedição e Em Campo num só login, separadas por uma guia no topo. É o único perfil que permite digitar o código de um item manualmente (em vez de só escanear) e marcar/desmarcar itens do desembarque tocando direto na lista — os demais perfis só confirmam por leitura de código de barras.
+- **Pintura** (senha padrão: `Pint!@0026`) — perfil enxuto, sem caixa nem carregamento: só a tela "Imprimir Desenhos" (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede o projeto+estrutura (ex.: `250492-TCR500`) e manda buscar e imprimir TODOS os desenhos técnicos daquela estrutura de uma vez — ver [Impressão de desenhos em lote (perfil Pintura)](#impressão-de-desenhos-em-lote-perfil-pintura).
 
-Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` em `backend/.env`:
+Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` / `PINTURA_PASSWORD_HASH` em `backend/.env`:
 
 ```bash
 node -e "require('bcrypt').hash('SUA_SENHA',12).then(h=>console.log(h))"
@@ -109,6 +110,19 @@ Ver `desenho-agent/README.md` para instalação e configuração para iniciar ju
 ### Reimpressão manual dos desenhos
 
 O enfileiramento automático descrito acima só dispara quando o item é criado ou tem o `codigo_item` alterado. Clicar em **"🧾 Romaneio"** numa caixa de Produção já reenfileira a busca/impressão do desenho técnico de todos os itens da caixa (ver [Impressão de etiquetas e romaneio de Produção](#impressão-de-etiquetas-e-romaneio-de-produção)), então normalmente não é preciso fazer mais nada. Ainda assim existe o botão **"📐 Reimprimir Desenhos"**, visível só pro perfil Produção no detalhe da caixa (`frontend/index.html`, `renderFooterCaixaDetalhe`), que chama `POST /api/caixas/:id/reimprimir-desenhos` e faz exatamente a mesma coisa isoladamente — útil pra reenviar só os desenhos sem gerar um novo romaneio, por exemplo se a impressora a laser ficou sem papel na primeira tentativa.
+
+## Impressão de desenhos em lote (perfil Pintura)
+
+O perfil **Pintura** não monta caixa nem carregamento — a única tela é **"Imprimir Desenhos"** (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede um campo **Projeto** com exatamente 13 caracteres: `NNNNNN-LLLnnn` (6 dígitos do projeto + hífen + 3 letras da estrutura + 3 dígitos, ex.: `250492-TCR500`). Diferente da busca de Produção (que imprime o desenho de UM item específico lido numa caixa), aqui o pedido é **"imprima todos os desenhos dessa estrutura"** de uma vez.
+
+1. **Servidor** — `POST /api/desenhos-tecnicos-lote` (`backend/routes/desenhosTecnicosLote.js`) valida o formato do campo e grava um pedido pendente na tabela `desenho_tecnico_lote_fila` (projeto + estrutura completa). A resposta só confirma que o pedido foi enfileirado — não espera a busca/impressão terminar, então o app não mostra quantos desenhos saíram.
+2. **`desenho-agent/`** (o mesmo agente do fluxo de Produção — ver seção acima) consulta também `GET /api/desenhos-tecnicos-lote/pendentes` a cada ciclo e, pra cada pedido:
+   - Acha a pasta do projeto e a pasta da estrutura do mesmo jeito que no fluxo de item único (prefixo pelo número do projeto, depois prefixo pelas 3 letras da estrutura).
+   - Verifica se existe, dentro da pasta da estrutura, mais uma subpasta batizada com o código completo informado (ex.: `TCR-500` dentro de `TCR - Transportador de Correia de Roletes`) — algumas estruturas são divididas em faixas assim, cada subpasta só com os PDFs daquela faixa (ex.: `TCR500` a `TCR595`). Se existir essa subpasta, a busca fica restrita a ela (evita pegar peças de uma faixa vizinha, tipo uma subpasta irmã `TCR-600`); se não existir, busca direto na pasta da estrutura mesmo.
+   - A partir daí, varre essa pasta **e todas as suas subpastas** (recursivo) atrás de qualquer arquivo `.pdf`, agrupa os arquivos pelo nome da peça (tudo antes do `-R<número>` final) e, pra cada peça, fica só com a revisão mais alta — mesma regra do fluxo de item único, agora aplicada a todos os arquivos da pasta de uma vez.
+   - Imprime cada PDF escolhido, em sequência, na mesma impressora a laser (`IMPRESSORA_DESENHOS_NOME`, `scale: "fit"` + `paperSize: "A4"`), e reporta o resultado pra `POST /api/desenhos-tecnicos-lote/:id/concluido` (quantos imprimiram com sucesso e quantos falharam) ou `:id/erro` (se a busca em si falhar antes de achar qualquer PDF — pasta não encontrada, ambígua, nenhum PDF na pasta, etc.).
+
+Assim como no fluxo de item único, uma falha aqui (pasta não encontrada, ambígua, sem PDF) nunca trava nada no app — só fica registrada na fila para conferência depois. Ver `desenho-agent/README.md`.
 
 ## Painel Administrativo (`/admin`)
 
@@ -265,6 +279,7 @@ mysql -u root -p burntech_expedicao < alter_desenho_tecnico_impressao.sql  # fil
 mysql -u root -p burntech_expedicao < migrar_producao_para_caixas.sql  # Produção passa a usar caixas/caixa_itens (idêntico a Almoxarifado) — leia os comentários no topo do arquivo antes de rodar
 mysql -u root -p burntech_expedicao < alter_romaneio_impressao_fila.sql  # fila de impressão automática do romaneio de Produção (laser A4), agora ligada a caixas
 mysql -u root -p burntech_expedicao < alter_desembarque_observacoes.sql  # campo de observações opcionais no desembarque (perfil Em Campo)
+mysql -u root -p burntech_expedicao < alter_desenho_tecnico_lote.sql  # fila de impressão em lote de desenhos técnicos (perfil Pintura)
 ```
 
 Se o banco já rodou os dois scripts marcados como "histórico" acima (ou seja, se as tabelas `romaneios_producao`/`romaneio_producao_itens`/`romaneio_producao_impressao_fila` existem), rode `migrar_producao_para_caixas.sql` por último — ele migra os dados dessas tabelas para `caixas`/`caixa_itens` e reaponta `desenho_tecnico_impressao_fila` para os novos itens. Se o banco nunca teve o perfil Produção rodando com essa estrutura antiga (instalação nova a partir do `banco_de_dados.sql` atual), **não precisa rodar `migrar_producao_para_caixas.sql`** — o schema novo já nasce correto.

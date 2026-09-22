@@ -195,6 +195,32 @@ CREATE TABLE desenho_tecnico_impressao_fila (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Tabela: desenho_tecnico_lote_fila
+-- Fila de busca + impressão automática de TODOS os desenhos técnicos
+-- de uma estrutura, pedida pelo perfil Pintura (tela "Imprimir
+-- Desenhos"). Diferente de desenho_tecnico_impressao_fila acima (um
+-- item específico de uma caixa do perfil Produção), aqui não existe
+-- caixa nem caixa_item envolvido — só projeto + estrutura completa
+-- (ex.: "250492" + "TCR500"), e o desenho-agent/ imprime todos os PDFs
+-- que encontrar dentro da pasta daquela estrutura (ou da subpasta da
+-- faixa, se existir uma — ver comentários no agente).
+-- ------------------------------------------------------------
+CREATE TABLE desenho_tecnico_lote_fila (
+  id                     INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  projeto                VARCHAR(10)  NOT NULL,
+  estrutura              VARCHAR(20)  NOT NULL,
+  solicitado_por_perfil  ENUM('pintura') NOT NULL DEFAULT 'pintura',
+  status                 ENUM('pendente', 'concluido', 'erro') NOT NULL DEFAULT 'pendente',
+  quantidade_impressa    INT UNSIGNED NULL,
+  quantidade_erro        INT UNSIGNED NULL,
+  erro_msg               VARCHAR(300) NULL,
+  criado_em              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  concluido_em           DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_desenho_tecnico_lote_fila_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Tabela: carregamento_itens
 -- Relação um-para-muitos: cada carregamento tem N itens/materiais.
 -- "caixa_id" fica preenchido quando o item veio de uma caixa lida

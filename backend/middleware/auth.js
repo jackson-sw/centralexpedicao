@@ -69,4 +69,15 @@ function apenasExpedicaoAdministrativo(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo };
+// Bloqueio: só o perfil Pintura pode solicitar a impressão em lote de
+// todos os desenhos técnicos de uma estrutura (ver backend/routes/
+// desenhosTecnicosLote.js) — diferente do fluxo de Produção, que busca
+// o desenho de UM item específico dentro de uma caixa.
+function apenasPintura(req, res, next) {
+  if (req.usuario?.perfil !== 'pintura') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Pintura.' });
+  }
+  next();
+}
+
+module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo, apenasPintura };
