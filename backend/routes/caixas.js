@@ -171,15 +171,14 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
       conn.release();
     }
 
-    // Busca/impressão automática de desenho técnico — só Produção lê
-    // itens no formato de estrutura de engenharia (ver
-    // PADRAO_CODIGO_DESENHO acima). Fire-and-forget: nunca atrasa nem
-    // derruba a resposta desta rota.
-    if (req.usuario.perfil === 'producao') {
-      for (let i = 0; i < itens.length; i++) {
-        await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
-      }
-    }
+    // Busca/impressão automática de desenho técnico — DESATIVADA para
+    // o perfil Produção (a pedido do usuário): lá agora só se imprime
+    // o romaneio. Código mantido comentado caso precise reativar.
+    // if (req.usuario.perfil === 'producao') {
+    //   for (let i = 0; i < itens.length; i++) {
+    //     await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+    //   }
+    // }
 
     res.status(201).json({ id: caixaId, status: 'aberta', itens_ids: itensIds, mensagem: 'Caixa salva. Use "Finalizar" quando estiver pronta.' });
   } catch (err) {
@@ -246,11 +245,13 @@ router.post('/:id/itens', auth, apenasMontagemCaixa, async (req, res) => {
       conn.release();
     }
 
-    if (req.usuario.perfil === 'producao') {
-      for (let i = 0; i < itens.length; i++) {
-        await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
-      }
-    }
+    // Impressão automática de desenho técnico DESATIVADA para Produção
+    // (a pedido do usuário) — lá agora só se imprime o romaneio.
+    // if (req.usuario.perfil === 'producao') {
+    //   for (let i = 0; i < itens.length; i++) {
+    //     await enfileirarDesenhoTecnicoSeAplicavel(itensIds[i], itens[i].codigo_item);
+    //   }
+    // }
 
     res.json({ itens_ids: itensIds, mensagem: `${itens.length} ${itens.length === 1 ? 'item adicionado' : 'itens adicionados'} por ${responsavel_nome}.` });
   } catch (err) {
@@ -292,9 +293,11 @@ router.put('/:caixaId/itens/:itemId', auth, apenasMontagemCaixa, async (req, res
     );
     if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a esta caixa.' });
 
-    if (req.usuario.perfil === 'producao' && itemAntes.codigo_item.trim() !== codigo_item.trim()) {
-      await enfileirarDesenhoTecnicoSeAplicavel(Number(req.params.itemId), codigo_item);
-    }
+    // Impressão automática de desenho técnico DESATIVADA para Produção
+    // (a pedido do usuário) — lá agora só se imprime o romaneio.
+    // if (req.usuario.perfil === 'producao' && itemAntes.codigo_item.trim() !== codigo_item.trim()) {
+    //   await enfileirarDesenhoTecnicoSeAplicavel(Number(req.params.itemId), codigo_item);
+    // }
 
     res.json({ id: Number(req.params.itemId), mensagem: 'Item atualizado.' });
   } catch (err) {
@@ -432,16 +435,15 @@ router.post('/:id/romaneio', auth, async (req, res) => {
       res.set('X-Impressao-Enfileirada', impressaoEnfileirada ? 'true' : 'false');
       if (impressaoErro) res.set('X-Impressao-Erro', impressaoErro);
 
-      // 2) Reenfileira a busca/impressão do desenho técnico de TODOS
-      // os itens da caixa — mesma ação do botão manual "📐 Reimprimir
-      // Desenhos" (ver rota abaixo), disparada automaticamente aqui
-      // pra não depender de lembrar de clicar em outro botão.
-      let desenhosEnfileirados = 0;
-      for (const item of itens) {
-        const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
-        if (ok) desenhosEnfileirados++;
-      }
-      res.set('X-Desenhos-Enfileirados', String(desenhosEnfileirados));
+      // 2) Impressão automática de desenho técnico DESATIVADA (a
+      // pedido do usuário) — no perfil Produção agora só se imprime o
+      // romaneio. Código mantido comentado caso precise reativar.
+      // let desenhosEnfileirados = 0;
+      // for (const item of itens) {
+      //   const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
+      //   if (ok) desenhosEnfileirados++;
+      // }
+      // res.set('X-Desenhos-Enfileirados', String(desenhosEnfileirados));
     }
 
     res.send(pdfBuffer);
@@ -451,40 +453,36 @@ router.post('/:id/romaneio', auth, async (req, res) => {
   }
 });
 
-// POST /api/caixas/:id/reimprimir-desenhos — reenfileira a busca+
-// impressão do desenho técnico de TODOS os itens da caixa que batem
-// com o padrão de código (ver PADRAO_CODIGO_DESENHO), de novo. Só
-// existe pra Produção (é o único perfil cujos itens têm desenho
-// técnico). Clicar em "🧾 Romaneio" já reenfileira os desenhos da
-// caixa inteira automaticamente (ver POST /:id/romaneio) — este botão
-// serve pra disparar só essa parte isoladamente, sem gerar um novo
-// romaneio: ação manual e explícita, reimprime mesmo que o desenho
-// daquele item já tenha sido impresso com sucesso antes.
-router.post('/:id/reimprimir-desenhos', auth, async (req, res) => {
-  try {
-    if (req.usuario?.perfil !== 'producao') {
-      return res.status(403).json({ erro: 'Acesso restrito ao perfil Produção.' });
-    }
-
-    const [[caixa]] = await db.query('SELECT id FROM caixas WHERE id = ?', [req.params.id]);
-    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
-
-    const [itens] = await db.query(
-      'SELECT id, codigo_item FROM caixa_itens WHERE caixa_id = ?',
-      [caixa.id]
-    );
-
-    let enfileirados = 0;
-    for (const item of itens) {
-      const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
-      if (ok) enfileirados++;
-    }
-
-    res.json({ enfileirados, total_itens: itens.length });
-  } catch (err) {
-    console.error('[POST /caixas/:id/reimprimir-desenhos]', err.message);
-    res.status(500).json({ erro: 'Erro ao reenfileirar desenhos técnicos.' });
-  }
-});
+// POST /api/caixas/:id/reimprimir-desenhos — DESATIVADA (a pedido do
+// usuário): no perfil Produção agora só se imprime o romaneio, sem
+// nenhuma busca/impressão de desenho técnico. Rota comentada inteira
+// (em vez de removida) caso precise reativar no futuro; o botão
+// correspondente no frontend também está comentado.
+// router.post('/:id/reimprimir-desenhos', auth, async (req, res) => {
+//   try {
+//     if (req.usuario?.perfil !== 'producao') {
+//       return res.status(403).json({ erro: 'Acesso restrito ao perfil Produção.' });
+//     }
+//
+//     const [[caixa]] = await db.query('SELECT id FROM caixas WHERE id = ?', [req.params.id]);
+//     if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+//
+//     const [itens] = await db.query(
+//       'SELECT id, codigo_item FROM caixa_itens WHERE caixa_id = ?',
+//       [caixa.id]
+//     );
+//
+//     let enfileirados = 0;
+//     for (const item of itens) {
+//       const ok = await enfileirarDesenhoTecnicoSeAplicavel(item.id, item.codigo_item);
+//       if (ok) enfileirados++;
+//     }
+//
+//     res.json({ enfileirados, total_itens: itens.length });
+//   } catch (err) {
+//     console.error('[POST /caixas/:id/reimprimir-desenhos]', err.message);
+//     res.status(500).json({ erro: 'Erro ao reenfileirar desenhos técnicos.' });
+//   }
+// });
 
 module.exports = router;

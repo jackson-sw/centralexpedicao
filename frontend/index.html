@@ -886,9 +886,9 @@ function boot() {
     // Produção reaproveita a MESMA tela e o MESMO backend do
     // Almoxarifado (tabelas caixas/caixa_itens, numeração CXxxxxxx,
     // etiqueta na mesma impressora) — só muda a equipe de responsáveis
-    // (ver RESPONSAVEIS_POR_PERFIL) e o crachá do cabeçalho. A única
-    // diferença funcional é a impressão automática de desenho técnico
-    // (ver botão "📐 Reimprimir Desenhos" em renderFooterCaixaDetalhe).
+    // (ver RESPONSAVEIS_POR_PERFIL) e o crachá do cabeçalho. A busca/
+    // impressão automática de desenho técnico (botão "📐 Reimprimir
+    // Desenhos") foi desativada — ver README.md.
     const ehProducao = PERFIL === 'producao';
     roleEl.textContent = ehProducao ? 'Produção' : 'Almoxarifado';
     roleEl.className = ehProducao ? 'hrole r-prod' : 'hrole r-almox';
@@ -1417,13 +1417,12 @@ function renderFooterCaixaDetalhe(c) {
       botoes += `<button class="btn btn-out" id="btn-reimprimir-${c.id}" onclick="reimprimirEtiquetaCaixa(${c.id})">🖨️ Reimprimir</button>`;
     }
     botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
-    // Só Produção tem desenho técnico (ver PADRAO_CODIGO_DESENHO no
-    // backend) — o enfileiramento automático só dispara na criação/edição
-    // do item, então esse botão existe pra reimprimir os desenhos de novo
-    // sob demanda (ex.: impressora ficou sem papel na primeira vez).
-    if (PERFIL === 'producao') {
-      botoes += `<button class="btn btn-out" id="btn-reimprimir-desenhos-${c.id}" onclick="reimprimirDesenhosCaixa(${c.id})">📐 Reimprimir Desenhos</button>`;
-    }
+    // Botão "Reimprimir Desenhos" DESATIVADO (a pedido do usuário) —
+    // no perfil Produção agora só se imprime o romaneio. Comentado em
+    // vez de removido, caso precise reativar no futuro.
+    // if (PERFIL === 'producao') {
+    //   botoes += `<button class="btn btn-out" id="btn-reimprimir-desenhos-${c.id}" onclick="reimprimirDesenhosCaixa(${c.id})">📐 Reimprimir Desenhos</button>`;
+    // }
   }
   footer.innerHTML = `<button class="btn btn-out" onclick="fecharModal('mo-caixa-detalhe')">Fechar</button>${botoes}`;
 }
@@ -1806,27 +1805,28 @@ async function gerarRomaneio(id, btnId) {
   await baixarRomaneio(`${apiBaseCaixaAtual()}/${id}/romaneio`, btnId || `btn-romaneio-${id}`, `romaneio-${id}.pdf`);
 }
 
-// Reenfileira a busca+impressão dos desenhos técnicos de todos os itens
-// do romaneio (perfil Produção) — não gera nem baixa nenhum PDF aqui, só
-// dispara os jobs pro desenho-agent/ pegar na próxima consulta.
-async function reimprimirDesenhosCaixa(id) {
-  const btnId = `btn-reimprimir-desenhos-${id}`;
-  const btn = document.getElementById(btnId);
-  const textoOriginal = btn ? btn.textContent : null;
-  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
-  try {
-    const data = await api('POST', `${apiBaseCaixaAtual()}/${id}/reimprimir-desenhos`, {});
-    if (data.enfileirados > 0) {
-      toast(`${data.enfileirados} desenho(s) técnico(s) enviado(s) para impressão.`);
-    } else {
-      toast('Nenhum item deste romaneio tem desenho técnico associado.', true);
-    }
-  } catch (e) {
-    toast(e.message, true);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
-  }
-}
+// Função "Reimprimir Desenhos" DESATIVADA (a pedido do usuário) — no
+// perfil Produção agora só se imprime o romaneio. Mantida comentada
+// (em vez de removida) caso precise reativar no futuro; o botão que a
+// chamava também está comentado, acima.
+// async function reimprimirDesenhosCaixa(id) {
+//   const btnId = `btn-reimprimir-desenhos-${id}`;
+//   const btn = document.getElementById(btnId);
+//   const textoOriginal = btn ? btn.textContent : null;
+//   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+//   try {
+//     const data = await api('POST', `${apiBaseCaixaAtual()}/${id}/reimprimir-desenhos`, {});
+//     if (data.enfileirados > 0) {
+//       toast(`${data.enfileirados} desenho(s) técnico(s) enviado(s) para impressão.`);
+//     } else {
+//       toast('Nenhum item deste romaneio tem desenho técnico associado.', true);
+//     }
+//   } catch (e) {
+//     toast(e.message, true);
+//   } finally {
+//     if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
+//   }
+// }
 
 async function gerarRomaneioCarregamento(id) {
   await baixarRomaneio(`/carregamentos/${id}/romaneio`, `btn-romaneio-carreg-${id}`, `romaneio-carregamento-${id}.pdf`);
@@ -1853,7 +1853,9 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
     const emailErro = resp.headers.get('X-Email-Erro');
     const impressaoHeader = resp.headers.get('X-Impressao-Enfileirada');
     const impressaoErro = resp.headers.get('X-Impressao-Erro');
-    const desenhosHeader = resp.headers.get('X-Desenhos-Enfileirados');
+    // X-Desenhos-Enfileirados: backend não envia mais esse header (impressão
+    // automática de desenhos técnicos desativada no perfil Produção).
+    // const desenhosHeader = resp.headers.get('X-Desenhos-Enfileirados');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1874,10 +1876,10 @@ async function baixarRomaneio(path, btnId, nomeArquivoFallback, body) {
       if (impressaoHeader === 'true') partes.push('enviado para a impressora');
       else { partes.push('a impressão falhou' + (impressaoErro ? ': ' + impressaoErro : '')); houveFalha = true; }
     }
-    if (desenhosHeader !== null) {
-      const n = Number(desenhosHeader) || 0;
-      if (n > 0) partes.push(`${n} desenho(s) técnico(s) reenviado(s) para impressão`);
-    }
+    // if (desenhosHeader !== null) {
+    //   const n = Number(desenhosHeader) || 0;
+    //   if (n > 0) partes.push(`${n} desenho(s) técnico(s) reenviado(s) para impressão`);
+    // }
     toast('Romaneio gerado' + (partes.length ? ', ' + partes.join(', ') : '') + '.', houveFalha);
   } catch (e) {
     toast(e.message, true);
