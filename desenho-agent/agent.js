@@ -42,7 +42,9 @@
 require('dotenv').config();
 const { print } = require('pdf-to-printer');
 const fs = require('fs/promises');
+const os = require('os');
 const path = require('path');
+const { gerarRelatorioLotePDF } = require('./relatorioLote');
 
 const API_URL = (process.env.API_URL || '').replace(/\/+$/, '');
 const AGENT_API_KEY = process.env.AGENT_API_KEY;
@@ -345,7 +347,9 @@ async function processarJobLote(job) {
 
     let impressos = 0;
     let comErro = 0;
+    const resultados = []; // { arquivo, sucesso, erro? } — vira a folha de relatório abaixo
     for (const { chave, caminho } of escolhidos) {
+      const arquivo = path.basename(caminho);
       try {
         await print(caminho, {
           printer: IMPRESSORA_DESENHOS_NOME,
@@ -354,10 +358,31 @@ async function processarJobLote(job) {
           paperSize: 'A4',
         });
         impressos++;
+        resultados.push({ arquivo, sucesso: true });
       } catch (err) {
         comErro++;
+        resultados.push({ arquivo, sucesso: false, erro: err.message });
         log(`ERRO ao imprimir "${chave}" (${caminho}):`, err.message);
       }
+    }
+
+    // Folha de relatório (quantidade + nome de cada desenho, com o
+    // resultado real de cada impressão) — sai por ÚLTIMO, depois de
+    // todos os desenhos, porque só agora sabemos o que deu certo ou
+    // não. Gerada e impressa como um PDF à parte (não é uma página a
+    // mais dentro de cada desenho) — na prática sai na sequência, logo
+    // depois do último desenho, como a folha final do lote.
+    try {
+      const relatorioBuffer = await gerarRelatorioLotePDF({ projeto: job.projeto, estrutura: job.estrutura, resultados });
+      const caminhoRelatorio = path.join(os.tmpdir(), `relatorio-${job.projeto}-${job.estrutura}-${job.id}.pdf`);
+      await fs.writeFile(caminhoRelatorio, relatorioBuffer);
+      await print(caminhoRelatorio, { printer: IMPRESSORA_DESENHOS_NOME, silent: true });
+      await fs.unlink(caminhoRelatorio).catch(() => {});
+      log(`Folha de relatório do lote "${job.projeto}-${job.estrutura}" impressa.`);
+    } catch (err) {
+      // Falha só na folha de relatório não deve derrubar o lote inteiro
+      // (os desenhos em si já saíram) — só loga o problema.
+      log(`ERRO ao gerar/imprimir a folha de relatório de "${job.projeto}-${job.estrutura}":`, err.message);
     }
 
     await marcarLoteConcluido(job.id, impressos, comErro);

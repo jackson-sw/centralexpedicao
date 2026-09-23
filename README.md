@@ -124,6 +124,8 @@ O perfil **Pintura** não monta caixa nem carregamento — a única tela é **"I
 
 Assim como no fluxo de item único, uma falha aqui (pasta não encontrada, ambígua, sem PDF) nunca trava nada no app — só fica registrada na fila para conferência depois. Ver `desenho-agent/README.md`.
 
+Depois de imprimir todos os desenhos do lote, o agente imprime mais uma folha, como **última página**: uma folha de relatório (gerada localmente pelo próprio `desenho-agent/`, via `relatorioLote.js`) com a estrutura pesquisada, data/hora, o total de desenhos encontrados e uma tabela listando o nome de cada arquivo impresso com o status individual ("Impresso" ou "Erro"). Útil pra conferência manual de que tudo saiu certo, sem precisar contar as folhas na impressora.
+
 ## Painel Administrativo (`/admin`)
 
 Consulta do catálogo de itens/materiais (código, descrição, quantidade), com busca, ordenação e paginação — **somente leitura**. Cadastro, edição e exclusão de itens não acontecem mais aqui: são feitos direto no ERP (ver seção abaixo). Acesse em `http://localhost:3002/admin` (ou `https://seu-dominio.com.br/admin` em produção) e entre com a senha do Admin.

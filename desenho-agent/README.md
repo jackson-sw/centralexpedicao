@@ -69,6 +69,17 @@ Se a busca falhar antes de achar qualquer PDF (pasta não encontrada,
 ambígua, pasta vazia), o pedido fica marcado como erro na fila, igual
 ao fluxo de item único.
 
+Depois de imprimir todos os desenhos do lote, o agente gera e imprime
+mais uma folha, como a **última página** do lote: uma "Folha de
+Relatório" (`relatorioLote.js`) com a estrutura pesquisada, data/hora,
+o total de desenhos encontrados e uma tabela com o nome de cada
+arquivo impresso e o status individual ("Impresso" em verde ou "Erro"
+em vermelho, caso algum falhe especificamente). Se a lista for grande,
+a tabela continua nas páginas seguintes, sempre repetindo o cabeçalho
+da tabela. Se a geração/impressão dessa folha falhar por algum motivo,
+o erro só é registrado no log do agente — não impede o lote de ser
+marcado como concluído, já que os desenhos em si já foram impressos.
+
 ## Pré-requisitos
 
 - Windows (o agente usa o SumatraPDF por baixo, via `pdf-to-printer`,
