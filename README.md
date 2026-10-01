@@ -171,6 +171,28 @@ Esse terceiro número (posição) é só para essa consulta — a busca automát
 
 `backend/dbErp.js` mantém uma pool de conexões própria (via `mssql`/Tedious) separada da conexão MySQL principal — essa conexão é somente leitura, a aplicação nunca grava no ERP. As credenciais ficam em `backend/.env` (`ERP_DB_*`, ver abaixo).
 
+### Validação de projeto do item lido (Novo/Alterar Carregamento)
+
+Ao ler/digitar um código de item avulso em Novo Carregamento ou Alterar Carregamento, o frontend confere se ele pertence ao **Nº do Projeto** informado no cabeçalho, pra pegar leitura errada na hora (`codigoPertenceAoProjeto`/`recusarItemForaDoProjeto`, `frontend/index.html`):
+
+- Quando o prefixo antes do hífen já é um número de projeto (6 dígitos normal, ou 8 de reforma — ver seção de reforma acima), a comparação é direta, como texto: o prefixo precisa ser exatamente igual ao Nº do Projeto informado.
+- Quando o prefixo **não** é um número de projeto (ex.: etiquetas de estrutura sem o projeto na frente, como `ACABRU-0001`), a comparação de texto não tem como funcionar — nesse caso o frontend consulta `GET /api/itens-materiais/pertence-projeto?codigo=...&projeto=...` (`backend/routes/itensMateriais.js`), que confirma no ERP se aquele código de item realmente está na ordem de produção (`ORD_ORDEM`/`ORD_ORDEMPRVITEM`) do projeto informado:
+
+```sql
+SELECT TOP 1
+  RTRIM(pp.PRO_Descricao)       AS descricao,
+  oi.ORD_OrdemPrvItemQuantidade AS quantidade
+FROM ORD_ORDEM AS oo
+JOIN ORD_ORDEMPRVITEM AS oi
+  ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
+JOIN PRO_PRODUTO AS pp
+  ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
+WHERE TRY_CAST(oo.ORD_OrdemProjeto AS BIGINT) = TRY_CAST(@projeto AS BIGINT)
+  AND RTRIM(oi.ORD_OrdemPrvItemProduto) = @codigo
+```
+
+Se não achar nenhuma linha (ou se o ERP estiver inacessível no momento), o item é recusado — por segurança, trata como "não pertence" em vez de deixar passar sem confirmação. Um código sem hífen (fora de qualquer padrão de estrutura) continua passando direto, sem checagem, como sempre foi.
+
 Para diagnosticar problemas de conexão sem precisar logar no app:
 
 ```bash

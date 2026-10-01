@@ -127,4 +127,51 @@ router.get('/codigo/:codigo', auth, async (req, res) => {
   }
 });
 
+// GET /api/itens-materiais/pertence-projeto?codigo=...&projeto=... —
+// usado no fluxo de Novo/Alterar Carregamento pra confirmar se um item
+// cujo código NÃO carrega o número do projeto no próprio texto (ex.:
+// "ACABRU-0001", diferente de "250013-DGA109" ou de uma reforma de 8
+// dígitos "19029901-PET005") pertence mesmo à ordem de produção do
+// projeto informado pelo usuário no carregamento. Sem essa consulta,
+// o frontend não teria como comparar o código com o projeto — a
+// comparação de texto (prefixo antes do hífen) só funciona quando o
+// próprio código já carrega o número do projeto.
+//
+// TRY_CAST no projeto porque ORD_OrdemProjeto é numérico no ERP — evita
+// que um valor não-numérico derrube a consulta (mesmo motivo do
+// TRY_CAST em SELECT_POR_POSICAO acima).
+router.get('/pertence-projeto', auth, async (req, res) => {
+  try {
+    const codigo = String(req.query.codigo || '').trim();
+    const projeto = String(req.query.projeto || '').trim();
+    if (!codigo || !projeto) {
+      return res.status(400).json({ erro: 'Informe codigo e projeto.' });
+    }
+
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('codigo', sql.NVarChar, codigo);
+    request.input('projeto', sql.NVarChar, projeto);
+
+    const result = await request.query(`
+      SELECT TOP 1
+        RTRIM(pp.PRO_Descricao)       AS descricao,
+        oi.ORD_OrdemPrvItemQuantidade AS quantidade
+      FROM ORD_ORDEM AS oo
+      JOIN ORD_ORDEMPRVITEM AS oi
+        ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
+      JOIN PRO_PRODUTO AS pp
+        ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
+      WHERE TRY_CAST(oo.ORD_OrdemProjeto AS BIGINT) = TRY_CAST(@projeto AS BIGINT)
+        AND RTRIM(oi.ORD_OrdemPrvItemProduto) = @codigo
+    `);
+
+    const item = result.recordset[0];
+    res.json({ pertence: !!item });
+  } catch (err) {
+    console.error('[GET /itens-materiais/pertence-projeto]', err.message);
+    res.status(500).json({ erro: 'Erro ao consultar o ERP.' });
+  }
+});
+
 module.exports = router;

@@ -2297,7 +2297,7 @@ async function processarCodigoCarregAlterar(idx, codigo) {
     renderItensCarregAlterar();
     toast(`Caixa ${caixa.codigo_barras} adicionada ao carregamento.`);
   } catch (e) {
-    if (recusarItemForaDoProjeto(codigo, alterandoCarregamentoNumeroProjeto)) return;
+    if (await recusarItemForaDoProjeto(codigo, alterandoCarregamentoNumeroProjeto)) return;
     atualizaItemCarregAlterar(idx, 'codigo_item', codigo);
     renderItensCarregAlterar();
     preencherDescricaoPorCodigo('carregamento-alterar', idx);
@@ -2472,29 +2472,65 @@ function mensagemErroCamera(e) {
 }
 
 // ── VALIDAÇÃO DE PROJETO DO ITEM (Novo Carregamento / Alterar Carregamento) ──
-// Os códigos de item avulso seguem o padrão "PROJETO-CODIGO" (ex.:
-// "240724-GRL067"). Para pegar leitura errada na hora (item de outro
-// carregamento/projeto escaneado por engano), comparamos o prefixo com
-// o Nº do Projeto deste carregamento. Um código sem hífen (fora do
-// padrão) não é bloqueado — não dá pra saber a qual projeto pertence,
-// então passa direto. Código de caixa inteira (formato "CX000015") nem
-// passa por aqui — ver os ramos de sucesso em processarCodigoCarregamento
-// e processarCodigoCarregAlterar.
-function codigoPertenceAoProjeto(codigo, numeroProjeto) {
+// Os códigos de item avulso costumam seguir o padrão "PROJETO-CODIGO"
+// (ex.: "240724-GRL067"), ou, pra projetos de reforma, "PROJETO" com 8
+// dígitos (ex.: "19029901-PET005"). Para pegar leitura errada na hora
+// (item de outro carregamento/projeto escaneado por engano), comparamos
+// o prefixo com o Nº do Projeto deste carregamento.
+//
+// Nem todo código carrega o projeto no próprio texto, porém — algumas
+// etiquetas trazem só a sigla da estrutura, sem número de projeto na
+// frente (ex.: "ACABRU-0001"). Nesse caso a comparação de texto não tem
+// como funcionar (o prefixo "ACABRU" nunca vai bater com um número de
+// projeto), então a única forma de confirmar é consultando o ERP se
+// aquele código de item pertence mesmo à ordem de produção do projeto
+// informado (GET /api/itens-materiais/pertence-projeto, ver
+// backend/routes/itensMateriais.js).
+//
+// Um código sem hífen (fora do padrão) não é bloqueado — não dá pra
+// saber a qual projeto pertence, então passa direto, como sempre.
+// Código de caixa inteira (formato "CX000015") nem passa por aqui — ver
+// os ramos de sucesso em processarCodigoCarregamento e
+// processarCodigoCarregAlterar.
+const PADRAO_PREFIXO_PROJETO = /^\d{6}(?:\d{2})?$/; // 6 dígitos normal, ou 8 de reforma
+
+async function codigoPertenceAoProjeto(codigo, numeroProjeto) {
   const separador = codigo.indexOf('-');
   if (separador === -1) return true;
   const prefixo = codigo.slice(0, separador).trim();
-  return prefixo === (numeroProjeto || '').trim();
+
+  // Prefixo já é o número do projeto (6 ou 8 dígitos) — comparação de
+  // texto direta, igual sempre funcionou.
+  if (PADRAO_PREFIXO_PROJETO.test(prefixo)) {
+    return prefixo === (numeroProjeto || '').trim();
+  }
+
+  // Prefixo não é um número de projeto (ex.: sigla de estrutura sem o
+  // projeto na frente) — só o ERP sabe se esse item pertence ao
+  // projeto informado.
+  if (!numeroProjeto) return true; // nada informado ainda, não há o que checar aqui
+  try {
+    const resp = await api('GET', `/itens-materiais/pertence-projeto?codigo=${encodeURIComponent(codigo)}&projeto=${encodeURIComponent(numeroProjeto)}`);
+    return !!resp.pertence;
+  } catch (e) {
+    return false; // ERP inacessível ou item não encontrado — trata como não pertencente, por segurança
+  }
 }
 
 // Se o código não pertence ao projeto do carregamento, avisa e recusa
 // a leitura — retorna true nesse caso (quem chamou não deve preencher
 // a linha com esse código). Chamada tanto na leitura por câmera quanto
 // na digitação manual (Expedição Administrativo).
-function recusarItemForaDoProjeto(codigo, numeroProjeto) {
-  if (codigoPertenceAoProjeto(codigo, numeroProjeto)) return false;
-  const prefixo = codigo.split('-')[0];
-  toast(`Item ${codigo} é do projeto ${prefixo}, não do ${numeroProjeto} deste carregamento. Item não adicionado.`, true);
+async function recusarItemForaDoProjeto(codigo, numeroProjeto) {
+  if (await codigoPertenceAoProjeto(codigo, numeroProjeto)) return false;
+
+  const separador = codigo.indexOf('-');
+  const prefixo = separador === -1 ? codigo : codigo.slice(0, separador).trim();
+  if (PADRAO_PREFIXO_PROJETO.test(prefixo)) {
+    toast(`Item ${codigo} é do projeto ${prefixo}, não do ${numeroProjeto} deste carregamento. Item não adicionado.`, true);
+  } else {
+    toast(`Item ${codigo} não encontrado na ordem de produção do projeto ${numeroProjeto}. Item não adicionado.`, true);
+  }
   return true;
 }
 
@@ -2529,7 +2565,7 @@ async function processarCodigoCarregamento(idx, codigo) {
   } catch (e) {
     // Código não corresponde a nenhuma caixa — trata como item avulso normal.
     const numero_projeto = document.getElementById('nc-projeto').value.trim();
-    if (recusarItemForaDoProjeto(codigo, numero_projeto)) return;
+    if (await recusarItemForaDoProjeto(codigo, numero_projeto)) return;
     atualizaItem(idx, 'codigo_item', codigo);
     renderItens();
     preencherDescricaoPorCodigo('carregamento', idx);
@@ -2543,7 +2579,7 @@ async function processarCodigoCarregamento(idx, codigo) {
 // buscar a descrição no catálogo (ver codigoPertenceAoProjeto/
 // recusarItemForaDoProjeto) — se o item for de outro projeto, limpa a
 // linha na hora em vez de preencher a descrição.
-function validarProjetoAoSairDoCodigo(tipo, idx) {
+async function validarProjetoAoSairDoCodigo(tipo, idx) {
   const arr = tipo === 'carregamento' ? itensAtuais : novosItensCarregAlterar;
   const item = arr[idx];
   if (!item || item.caixa_id) return; // caixa inteira não tem prefixo de projeto
@@ -2554,7 +2590,7 @@ function validarProjetoAoSairDoCodigo(tipo, idx) {
     ? document.getElementById('nc-projeto').value.trim()
     : alterandoCarregamentoNumeroProjeto;
 
-  if (recusarItemForaDoProjeto(codigo, numeroProjeto)) {
+  if (await recusarItemForaDoProjeto(codigo, numeroProjeto)) {
     if (tipo === 'carregamento') {
       atualizaItem(idx, 'codigo_item', '');
       atualizaItem(idx, 'descricao', '');
