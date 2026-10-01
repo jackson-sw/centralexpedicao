@@ -320,7 +320,22 @@ async function processarJob(job) {
 async function processarJobLote(job) {
   log(`Buscando TODOS os desenhos da estrutura "${job.projeto}-${job.estrutura}"...`);
   try {
-    const pastaProjeto = await acharSubpastaPorPrefixo(PASTA_PROJETOS, job.projeto, 'Pasta do projeto');
+    // O número do projeto normalmente tem 6 dígitos. Projetos de
+    // REFORMA de uma estrutura já existente têm 8 dígitos no código
+    // (6 do projeto original + 2 do número da reforma) — mas no
+    // servidor de arquivos a pasta principal do projeto continua
+    // nomeada só com os 6 dígitos originais; existe uma subpasta
+    // dentro dela, nomeada com o código completo de 8 dígitos da
+    // reforma, que é onde a pasta da estrutura realmente fica. Por
+    // isso a pasta do projeto é sempre achada pelos 6 primeiros
+    // dígitos, e só então — se o código tiver 8 dígitos — se procura
+    // a subpasta da reforma pelo código completo.
+    const projetoBase = job.projeto.slice(0, 6);
+    let pastaProjeto = await acharSubpastaPorPrefixo(PASTA_PROJETOS, projetoBase, 'Pasta do projeto');
+
+    if (job.projeto.length > 6) {
+      pastaProjeto = await acharSubpastaPorPrefixo(pastaProjeto, job.projeto, 'Subpasta da reforma');
+    }
 
     // As 3 primeiras letras da estrutura indicam a subpasta, igual no
     // modo item-a-item.

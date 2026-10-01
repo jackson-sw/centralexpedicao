@@ -11,15 +11,19 @@ const { auth, apenasPintura } = require('../middleware/auth');
 // e o desenho-agent/ imprime todos os PDFs que encontrar na pasta
 // daquela estrutura (ou na subpasta da faixa, se existir uma).
 
-// Formato do campo "Projeto" da tela de Pintura: projeto (6 dígitos) +
-// hífen + estrutura completa (3 letras + 3 dígitos) — sempre 13
-// caracteres, ex.: "250492-TCR500". Diferente do PADRAO_CODIGO_DESENHO
-// usado em Produção (backend/routes/caixas.js), que aceita qualquer
-// quantidade de dígitos no número da peça (e uma posição opcional no
-// final) porque ali o código vem de uma etiqueta lida item a item —
-// aqui é digitado à mão, então o formato fica fixo nos 13 caracteres
-// pedidos.
-const PADRAO_PROJETO_PINTURA = /^(\d{6})-([A-Za-z]{3}\d{3})$/;
+// Formato do campo "Projeto" da tela de Pintura: projeto + hífen +
+// estrutura completa (3 letras + 3 dígitos), ex.: "250492-TCR500".
+// Diferente do PADRAO_CODIGO_DESENHO usado em Produção (backend/routes/
+// caixas.js), que aceita qualquer quantidade de dígitos no número da
+// peça (e uma posição opcional no final) porque ali o código vem de
+// uma etiqueta lida item a item — aqui é digitado à mão, então o
+// formato do lado da estrutura fica fixo.
+//
+// O projeto normalmente tem 6 dígitos (13 caracteres no total), mas
+// projetos de REFORMA de uma estrutura já existente têm 8 dígitos (6
+// do projeto original + 2 do número da reforma, que não é sempre "01")
+// — nesse caso o campo todo tem 15 caracteres, ex.: "19029901-PET005".
+const PADRAO_PROJETO_PINTURA = /^(\d{6}(?:\d{2})?)-([A-Za-z]{3}\d{3})$/;
 
 // Bloqueio: só o agente local (desenho-agent/) pode consultar/concluir
 // esta fila — mesma chave fixa dos demais agentes (AGENT_API_KEY).
@@ -40,7 +44,7 @@ router.post('/', auth, apenasPintura, async (req, res) => {
     const projetoInformado = String(req.body.projeto || '').trim().toUpperCase();
     const match = PADRAO_PROJETO_PINTURA.exec(projetoInformado);
     if (!match) {
-      return res.status(400).json({ erro: 'Informe o projeto no formato NNNNNN-LLLnnn, com 13 caracteres (ex.: 250492-TCR500).' });
+      return res.status(400).json({ erro: 'Informe o projeto no formato NNNNNN-LLLnnn (ou NNNNNNNN-LLLnnn para reforma), ex.: 250492-TCR500 ou 19029901-PET005.' });
     }
     const [, projeto, estrutura] = match;
 

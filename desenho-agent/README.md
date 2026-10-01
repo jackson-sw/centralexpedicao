@@ -44,23 +44,32 @@ busca o arquivo de verdade e imprime é este agente, sozinho.
 Este mesmo agente também atende o perfil Pintura, que pede a impressão
 de **todos** os desenhos de uma estrutura de uma vez (não um item
 específico) — tela "Imprimir Desenhos", campo "Projeto" no formato
-`NNNNNN-LLLnnn` (ex.: `250492-TCR500`). O agente consulta
-`GET /api/desenhos-tecnicos-lote/pendentes` no mesmo ciclo e, pra cada
-pedido:
+`NNNNNN-LLLnnn` (ex.: `250492-TCR500`) ou, para projetos de **reforma**,
+`NNNNNNNN-LLLnnn` com 8 dígitos no projeto (ex.: `19029901-PET005`).
+O agente consulta `GET /api/desenhos-tecnicos-lote/pendentes` no mesmo
+ciclo e, pra cada pedido:
 
-1. Acha a pasta do projeto e a pasta da estrutura do mesmo jeito
-   (passos 1 e 2 acima).
-2. Verifica se existe, dentro da pasta da estrutura, mais uma subpasta
+1. Acha a pasta do projeto pelos **6 primeiros dígitos** do código
+   (a pasta principal do projeto no servidor é sempre nomeada só com
+   esses 6 dígitos, mesmo para reforma). Se o código tiver 8 dígitos
+   (reforma), procura em seguida, **dentro** dessa pasta, uma subpasta
+   batizada com o código completo de 8 dígitos (ex.: pasta do projeto
+   `190299-...`, com uma subpasta `19029901-...` dentro, representando
+   a reforma `01`) — é dentro dela que a busca da pasta da estrutura
+   (próximo passo) continua.
+2. Acha a pasta da estrutura do mesmo jeito do item único (passo 2
+   acima), dentro da pasta encontrada no passo anterior.
+3. Verifica se existe, dentro da pasta da estrutura, mais uma subpasta
    batizada com o código completo informado (ex.: `TCR-500` dentro de
    `TCR - Transportador de Correia de Roletes`) — algumas estruturas
    são divididas em faixas assim, cada subpasta só com os PDFs daquela
    faixa (`TCR500` a `TCR595`, por exemplo). Se existir, a busca fica
    restrita a essa subpasta; se não existir, busca direto na pasta da
    estrutura mesmo.
-3. Varre essa pasta **e todas as suas subpastas** atrás de qualquer
+4. Varre essa pasta **e todas as suas subpastas** atrás de qualquer
    `.pdf`, agrupa pelo nome da peça (tudo antes do `-R<número>` final)
    e fica só com a revisão mais alta de cada uma.
-4. Imprime cada PDF escolhido, em sequência, na mesma impressora
+5. Imprime cada PDF escolhido, em sequência, na mesma impressora
    (`IMPRESSORA_DESENHOS_NOME`, mesmas opções `scale: "fit"` +
    `paperSize: "A4"`), e reporta de volta quantos imprimiram com
    sucesso e quantos falharam.
@@ -177,6 +186,13 @@ Windows**.
   arquivo `.pdf`, nem nas subpastas dela. Confira se o projeto e a
   estrutura foram digitados certos e se os arquivos realmente estão
   nessa pasta no servidor.
+- **"Subpasta da reforma ... não encontrada"** (perfil Pintura, projeto
+  de 8 dígitos) — a pasta principal do projeto (6 dígitos) foi
+  encontrada, mas não existe dentro dela nenhuma subpasta nomeada com o
+  código completo de 8 dígitos informado (ex.: projeto `19029901` não
+  achou uma subpasta `19029901-...` dentro de `190299-...`). Confira se
+  o número da reforma foi digitado certo e se essa subpasta existe
+  mesmo no servidor com esse nome.
 - **Desenho saindo cortado/fora do esquadro do papel A4** — o agente já
   manda `scale: "fit"` (encolhe o conteúdo pra caber na página) e
   `paperSize: "A4"` (força a página impressa a ser A4, mesmo que o PDF

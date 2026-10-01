@@ -712,7 +712,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
     <div class="mb">
       <div class="fg">
         <label>Projeto *</label>
-        <input id="pintura-projeto" placeholder="Ex: 250492-TCR500" maxlength="13" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')imprimirDesenhosPintura()">
+        <input id="pintura-projeto" placeholder="Ex: 250492-TCR500 (ou 19029901-PET005 p/ reforma)" maxlength="15" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')imprimirDesenhosPintura()">
       </div>
     </div>
     <div class="mf">
@@ -1272,12 +1272,14 @@ async function gerarRomaneioFaltantes() {
 }
 
 // ── PINTURA — IMPRESSÃO DE DESENHOS EM LOTE ────────────
-// Formato do campo "Projeto": projeto (6 dígitos) + hífen + estrutura
-// completa (3 letras + 3 dígitos) — sempre 13 caracteres, ex.:
-// "250492-TCR500". Precisa bater com PADRAO_PROJETO_PINTURA do backend
-// (backend/routes/desenhosTecnicosLote.js) — validar aqui também só
-// evita uma ida ao servidor pra erro óbvio de digitação.
-const PADRAO_PROJETO_PINTURA = /^\d{6}-[A-Za-z]{3}\d{3}$/;
+// Formato do campo "Projeto": projeto + hífen + estrutura completa (3
+// letras + 3 dígitos), ex.: "250492-TCR500" (13 caracteres). Projetos
+// de REFORMA têm 8 dígitos no projeto (6 do original + 2 da reforma,
+// não sempre "01"), ex.: "19029901-PET005" (15 caracteres). Precisa
+// bater com PADRAO_PROJETO_PINTURA do backend (backend/routes/
+// desenhosTecnicosLote.js) — validar aqui também só evita uma ida ao
+// servidor pra erro óbvio de digitação.
+const PADRAO_PROJETO_PINTURA = /^\d{6}(?:\d{2})?-[A-Za-z]{3}\d{3}$/;
 
 function abrirImprimirDesenhosPintura() {
   document.getElementById('pintura-projeto').value = '';
@@ -1292,7 +1294,7 @@ function abrirImprimirDesenhosPintura() {
 async function imprimirDesenhosPintura() {
   const projeto = document.getElementById('pintura-projeto').value.trim().toUpperCase();
   if (!PADRAO_PROJETO_PINTURA.test(projeto)) {
-    toast('Informe o projeto no formato NNNNNN-LLLnnn, com 13 caracteres (ex.: 250492-TCR500).', true);
+    toast('Informe o projeto no formato NNNNNN-LLLnnn (ou NNNNNNNN-LLLnnn para reforma), ex.: 250492-TCR500 ou 19029901-PET005.', true);
     return;
   }
 

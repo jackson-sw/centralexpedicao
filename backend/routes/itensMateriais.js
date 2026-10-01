@@ -16,15 +16,21 @@ const SELECT_BASE = `
 `;
 
 // Novo formato de etiqueta de item de estrutura de engenharia, com uma
-// terceira parte no final: projeto (6 dígitos) + hífen + estrutura
-// (letras+número) + hífen + posição (ex.: "265545-DTV001-0463" →
-// produto "265545-DTV001", posição "0463"). Esse código não é o
-// PRO_Codigo direto — a posição identifica a linha específica dentro
-// da ordem de produção (ORD_ORDEMPRVITEM), então a descrição/
-// quantidade têm que vir de lá, não de PRO_PRODUTO isolado. Itens do
-// catálogo "normal" (sem essa terceira parte) continuam batendo direto
-// por PRO_Codigo, como sempre.
-const PADRAO_CODIGO_COM_POSICAO = /^(\d{6}-[A-Za-z]{3}\d+)-(\d+)$/;
+// terceira parte no final: projeto + hífen + estrutura (letras+número)
+// + hífen + posição (ex.: "265545-DTV001-0463" → produto
+// "265545-DTV001", posição "0463"). Esse código não é o PRO_Codigo
+// direto — a posição identifica a linha específica dentro da ordem de
+// produção (ORD_ORDEMPRVITEM), então a descrição/quantidade têm que
+// vir de lá, não de PRO_PRODUTO isolado. Itens do catálogo "normal"
+// (sem essa terceira parte) continuam batendo direto por PRO_Codigo,
+// como sempre.
+//
+// O número do projeto normalmente tem 6 dígitos (ex.: "265545"), mas
+// itens de REFORMA de uma estrutura já existente vêm com 8 dígitos:
+// os 6 dígitos do projeto original + 2 dígitos do número da reforma
+// (ex.: "19029901" = projeto "190299" + reforma "01" — o número da
+// reforma não é sempre "01", só o tamanho é sempre 8 dígitos no total).
+const PADRAO_CODIGO_COM_POSICAO = /^(\d{6}(?:\d{2})?-[A-Za-z]{3}\d+)-(\d+)$/;
 
 // SELECT do item de estrutura pela ordem de produção (ORD_ORDEM) +
 // posição (ORD_ORDEMPRVITEM), trazendo a descrição do produto em

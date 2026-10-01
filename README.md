@@ -113,7 +113,7 @@ O botão **"📐 Reimprimir Desenhos"**, que existia no detalhe da caixa só pro
 
 ## Impressão de desenhos em lote (perfil Pintura)
 
-O perfil **Pintura** não monta caixa nem carregamento — a única tela é **"Imprimir Desenhos"** (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede um campo **Projeto** com exatamente 13 caracteres: `NNNNNN-LLLnnn` (6 dígitos do projeto + hífen + 3 letras da estrutura + 3 dígitos, ex.: `250492-TCR500`). Diferente da busca de Produção (que imprime o desenho de UM item específico lido numa caixa), aqui o pedido é **"imprima todos os desenhos dessa estrutura"** de uma vez.
+O perfil **Pintura** não monta caixa nem carregamento — a única tela é **"Imprimir Desenhos"** (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede um campo **Projeto** no formato `NNNNNN-LLLnnn` (6 dígitos do projeto + hífen + 3 letras da estrutura + 3 dígitos, 13 caracteres, ex.: `250492-TCR500`) ou, para projetos de **reforma**, `NNNNNNNN-LLLnnn` (8 dígitos do projeto — os 6 originais + 2 da reforma — 15 caracteres, ex.: `19029901-PET005`). Diferente da busca de Produção (que imprime o desenho de UM item específico lido numa caixa), aqui o pedido é **"imprima todos os desenhos dessa estrutura"** de uma vez.
 
 1. **Servidor** — `POST /api/desenhos-tecnicos-lote` (`backend/routes/desenhosTecnicosLote.js`) valida o formato do campo e grava um pedido pendente na tabela `desenho_tecnico_lote_fila` (projeto + estrutura completa). A resposta só confirma que o pedido foi enfileirado — não espera a busca/impressão terminar, então o app não mostra quantos desenhos saíram.
 2. **`desenho-agent/`** (o mesmo agente do fluxo de Produção — ver seção acima) consulta também `GET /api/desenhos-tecnicos-lote/pendentes` a cada ciclo e, pra cada pedido:
@@ -164,6 +164,8 @@ WHERE RTRIM(oo.ORD_OrdemProduto) = @produto
 ```
 
 O programa que gera a etiqueta descarta os zeros à esquerda da posição (ex.: código de barras termina em `-78`, mas no ERP a posição fica gravada como `0078`) — por isso a comparação da posição é numérica (`TRY_CAST ... AS INT`) em vez de texto, pra "78" e "0078" baterem como o mesmo valor. `TRY_CAST` em vez de `CAST` evita que uma posição não-numérica derrube a consulta inteira — nesse caso simplesmente não bate, como esperado.
+
+O número do projeto (primeira parte do código, antes do hífen da estrutura) normalmente tem 6 dígitos, mas itens de **reforma** de uma estrutura já existente vêm com 8 dígitos — os 6 do projeto original mais 2 do número da reforma, que não é sempre "01" (ex.: `19029901-PET005-0170`, projeto original `190299` + reforma `01`). `PADRAO_CODIGO_COM_POSICAO` aceita os dois tamanhos (6 ou 8 dígitos).
 
 Esse terceiro número (posição) é só para essa consulta — a busca automática do desenho técnico (ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico)) continua olhando só projeto+estrutura (`PADRAO_CODIGO_DESENHO` aceita a posição no final, mas a ignora), então continua funcionando normalmente tanto com etiquetas antigas (2 partes) quanto com as novas (3 partes, com ou sem zeros à esquerda na posição).
 
