@@ -1486,7 +1486,7 @@ function renderItensCaixa() {
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
-          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCaixa(${idx},'quantidade',this.value)">
+          <input id="quantidade-caixa-${idx}" type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCaixa(${idx},'quantidade',this.value)">
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px">
@@ -1499,6 +1499,10 @@ function renderItensCaixa() {
 function atualizaItemCaixa(idx, campo, valor) {
   const it = caixaItensAtuais[idx];
   it[campo] = valor;
+  // Marca que o usuário mexeu na quantidade manualmente, pra
+  // preencherDescricaoPorCodigo não sobrescrever depois com o valor
+  // vindo do ERP.
+  if (campo === 'quantidade') it.quantidadeTocada = true;
   // Se o item já tinha sido confirmado e agora foi editado, o botão
   // volta a ficar "pendente" pra avisar que precisa confirmar de novo
   // (sem recriar a linha inteira, pra não perder o foco do campo).
@@ -1682,7 +1686,7 @@ function renderItensAlterar() {
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
-          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemAlterar(${idx},'quantidade',this.value)">
+          <input id="quantidade-alterar-${idx}" type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemAlterar(${idx},'quantidade',this.value)">
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px">
@@ -1695,6 +1699,7 @@ function renderItensAlterar() {
 function atualizaItemAlterar(idx, campo, valor) {
   const it = novosItensAlterar[idx];
   it[campo] = valor;
+  if (campo === 'quantidade') it.quantidadeTocada = true;
   if (it.id && it.salvo) {
     it.salvo = false;
     const btn = document.getElementById(`btn-confirmar-alterar-${idx}`);
@@ -2000,7 +2005,7 @@ function renderItens() {
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
-          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItem(${idx},'quantidade',this.value)">
+          <input id="quantidade-carregamento-${idx}" type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItem(${idx},'quantidade',this.value)">
         </div>
       </div>
       ${it.caixa_id ? `<div class="cc-from-box">🧰 Veio da caixa ${escapeHtml(it.caixa_codigo || '')}</div>` : ''}
@@ -2017,6 +2022,7 @@ function atualizaItem(idx, campo, valor) {
   // Se o código foi editado manualmente, o item deixa de ser tratado
   // como proveniente automaticamente de uma caixa.
   if (campo === 'codigo_item') { it.caixa_id = null; it.caixa_item_id = null; }
+  if (campo === 'quantidade') it.quantidadeTocada = true;
   if (it.id && it.salvo) {
     it.salvo = false;
     const btn = document.getElementById(`btn-confirmar-item-${idx}`);
@@ -2232,7 +2238,7 @@ function renderItensCarregAlterar() {
         </div>
         <div class="fg" style="margin-bottom:0">
           <label>Quantidade *</label>
-          <input type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCarregAlterar(${idx},'quantidade',this.value)">
+          <input id="quantidade-carregamento-alterar-${idx}" type="number" min="0" step="1" placeholder="1" value="${it.quantidade}" oninput="atualizaItemCarregAlterar(${idx},'quantidade',this.value)">
         </div>
       </div>
       ${it.caixa_id ? `<div class="cc-from-box">🧰 Veio da caixa ${escapeHtml(it.caixa_codigo || '')}</div>` : ''}
@@ -2247,6 +2253,7 @@ function atualizaItemCarregAlterar(idx, campo, valor) {
   const it = novosItensCarregAlterar[idx];
   it[campo] = valor;
   if (campo === 'codigo_item') { it.caixa_id = null; it.caixa_item_id = null; }
+  if (campo === 'quantidade') it.quantidadeTocada = true;
   if (it.id && it.salvo) {
     it.salvo = false;
     const btn = document.getElementById(`btn-confirmar-carreg-alterar-${idx}`);
@@ -2562,11 +2569,16 @@ function validarProjetoAoSairDoCodigo(tipo, idx) {
   preencherDescricaoPorCodigo(tipo, idx);
 }
 
-// ── AUTO-PREENCHIMENTO DA DESCRIÇÃO A PARTIR DO CATÁLOGO ──
+// ── AUTO-PREENCHIMENTO DA DESCRIÇÃO/QUANTIDADE A PARTIR DO CATÁLOGO ──
 // Ao informar o código do item (digitado ou escaneado) em Novo
-// Carregamento / Nova Caixa / Alterar Caixa, busca o item cadastrado
-// no painel administrativo (itens_materiais) e preenche a descrição
-// automaticamente — sem sobrescrever uma descrição já digitada.
+// Carregamento / Nova Caixa / Alterar Caixa / Alterar Carregamento,
+// busca o item no ERP (GET /itens-materiais/codigo/:codigo, ver
+// backend/routes/itensMateriais.js) e preenche descrição e quantidade
+// automaticamente — sem sobrescrever uma descrição já digitada, nem
+// uma quantidade que o usuário já tenha ajustado manualmente (ver
+// flag `quantidadeTocada`, marcada nos atualizaItem* ao editar o
+// campo Quantidade). O usuário pode sempre corrigir a quantidade
+// depois, caso a vinda do ERP não seja a desejada.
 async function preencherDescricaoPorCodigo(tipo, idx) {
   const arr = tipo === 'carregamento'          ? itensAtuais
             : tipo === 'caixa'                 ? caixaItensAtuais
@@ -2578,18 +2590,29 @@ async function preencherDescricaoPorCodigo(tipo, idx) {
   const item = arr[idx];
   if (!item) return;
   const codigo = (item.codigo_item || '').trim();
-  if (!codigo || (item.descricao && item.descricao.trim())) return;
+  if (!codigo) return;
+
+  const precisaDescricao = !(item.descricao && item.descricao.trim());
+  const precisaQuantidade = !item.quantidadeTocada;
+  if (!precisaDescricao && !precisaQuantidade) return;
 
   try {
     const encontrado = await api('GET', '/itens-materiais/codigo/' + encodeURIComponent(codigo));
     // Confere se nada mudou nesse item enquanto a busca estava em andamento.
     const atual = arr[idx];
     if (!atual || (atual.codigo_item || '').trim() !== codigo) return;
-    if (atual.descricao && atual.descricao.trim()) return;
 
-    atual.descricao = encontrado.descricao;
-    const campo = document.getElementById(`descricao-${tipo}-${idx}`);
-    if (campo) campo.value = encontrado.descricao;
+    if (!(atual.descricao && atual.descricao.trim())) {
+      atual.descricao = encontrado.descricao;
+      const campoDesc = document.getElementById(`descricao-${tipo}-${idx}`);
+      if (campoDesc) campoDesc.value = encontrado.descricao;
+    }
+
+    if (!atual.quantidadeTocada && encontrado.quantidade !== null && encontrado.quantidade !== undefined) {
+      atual.quantidade = encontrado.quantidade;
+      const campoQtd = document.getElementById(`quantidade-${tipo}-${idx}`);
+      if (campoQtd) campoQtd.value = encontrado.quantidade;
+    }
   } catch (e) {
     // Código não cadastrado no catálogo — segue normal, sem erro visível.
   }
