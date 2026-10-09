@@ -12,6 +12,7 @@ Sistema de controle de carregamento e descarregamento do setor de expedição da
 - `Dockerfile` + `docker-compose.yml` — build da imagem (backend + frontend) e orquestração com MySQL, para deploy em VPS.
 - `print-agent/` — script Node independente, roda fora do Docker/VPS, num computador local ligado às impressoras de etiqueta e à laser do romaneio de Produção — ver [Impressão de etiquetas e romaneio de Produção](#impressão-de-etiquetas-e-romaneio-de-produção).
 - `desenho-agent/` — script Node independente, roda numa máquina da rede interna com acesso ao servidor de arquivos on-premises, busca e imprime o desenho técnico de itens de estrutura lidos numa caixa do perfil Produção — ver [Impressão automática de desenho técnico](#impressão-automática-de-desenho-técnico) — e também atende o perfil Pintura, que pede a impressão de TODOS os desenhos de uma estrutura de uma vez — ver [Impressão de desenhos em lote (perfil Pintura)](#impressão-de-desenhos-em-lote-perfil-pintura).
+- `backup-mysql/` — script Windows (`.bat`) independente, para rodar num computador qualquer da rede (não precisa ser o servidor) e gerar backups periódicos do banco MySQL via `mysqldump` — ver `backup-mysql/README.md`.
 
 O backend serve o frontend estaticamente — em produção tudo roda em um único processo Node em uma única porta.
 
@@ -25,6 +26,8 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 - **Em Campo** (senha padrão: `emcampo!26`) — confere o desembarque dos carregamentos no destino (ver [Fluxo de desembarque](#fluxo-de-desembarque) abaixo).
 - **Expedição Administrativo** (senha padrão: `Bioc!@09`) — reúne as telas de Expedição e Em Campo num só login, separadas por uma guia no topo. É o único perfil que permite digitar o código de um item manualmente (em vez de só escanear) e marcar/desmarcar itens do desembarque tocando direto na lista — os demais perfis só confirmam por leitura de código de barras.
 - **Pintura** (senha padrão: `Pint!@0026`) — perfil enxuto, sem caixa nem carregamento: só a tela "Imprimir Desenhos" (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede o projeto+estrutura (ex.: `250492-TCR500`) e manda buscar e imprimir TODOS os desenhos técnicos daquela estrutura de uma vez — ver [Impressão de desenhos em lote (perfil Pintura)](#impressão-de-desenhos-em-lote-perfil-pintura).
+
+Os perfis **Expedição**, **Almoxarifado** e **Expedição Administrativo** têm uma guia **Relatórios** (depois de "Caixas"; Produção não vê). Por enquanto é só a tela: ao marcar "Relatório de estrutura de itens faltantes para envio" aparecem os campos *Número do projeto* e *Código da estrutura* — a geração do relatório (backend) ainda não existe.
 
 Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` / `PINTURA_PASSWORD_HASH` em `backend/.env`:
 

@@ -162,6 +162,14 @@ header{background:#fff;border-bottom:1px solid var(--border);min-height:56px;dis
 .simnao-opcao input{position:absolute;opacity:0;width:0;height:0;}
 .simnao-opcao.on{border-color:var(--red);background:var(--red-light);color:var(--red-dark);box-shadow:0 0 0 3px var(--red-soft);}
 
+/* ── GUIA RELATÓRIOS ───────────────────────────────── */
+.rel-painel{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;}
+.rel-opcao{display:flex;align-items:center;gap:10px;border:1.5px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s;}
+.rel-opcao.on{border-color:var(--red);background:var(--red-light);color:var(--red-dark);box-shadow:0 0 0 3px var(--red-soft);}
+/* O seletor global "input{width:100%;padding:...}" estica o radio — aqui volta ao tamanho nativo. */
+.rel-opcao input[type=radio]{width:auto;padding:0;margin:0;accent-color:var(--red);flex-shrink:0;}
+.rel-campos{margin-top:16px;}
+
 /* ── FAB (atalho para a ação principal de cada perfil) ─ */
 .fab-wrap{position:fixed;right:20px;bottom:calc(24px + var(--safe-bottom));z-index:40;display:flex;flex-direction:column;align-items:flex-end;gap:14px;}
 .fab{width:58px;height:58px;border-radius:50%;
@@ -372,10 +380,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
       <div class="hist-tabs">
         <div class="hist-tab on" id="tab-carregamentos" onclick="trocarAbaHistorico('carregamentos')">Carregamentos</div>
         <div class="hist-tab" id="tab-caixas" onclick="trocarAbaHistorico('caixas')">Caixas</div>
+        <div class="hist-tab" id="tab-relatorios" onclick="trocarAbaHistorico('relatorios')">Relatórios</div>
       </div>
 
       <div id="lista-carregamentos"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
       <div id="lista-caixas" style="display:none"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+      <!-- Preenchido por montarRelatorios() no boot() (perfis Expedição e Expedição Administrativo). -->
+      <div id="lista-relatorios" style="display:none"></div>
     </div>
 
     <div class="fab-wrap">
@@ -403,7 +414,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <button class="btn btn-blue" id="btn-novo-item-almox" onclick="abrirNovaCaixa()">+ Nova Caixa</button>
       </div>
 
+      <!-- Guias Caixas / Relatórios — só o perfil Almoxarifado (Produção usa
+           esta mesma tela, mas não tem Relatórios; ver boot()). -->
+      <div class="hist-tabs" id="almox-tabs" style="display:none">
+        <div class="hist-tab on" id="almox-tab-caixas" onclick="trocarAbaAlmox('caixas')">Caixas</div>
+        <div class="hist-tab" id="almox-tab-relatorios" onclick="trocarAbaAlmox('relatorios')">Relatórios</div>
+      </div>
+
       <div id="lista-caixas-almox"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+      <div id="lista-relatorios-almox" style="display:none"></div>
     </div>
 
     <div class="fab-wrap">
@@ -879,6 +898,7 @@ function boot() {
     // padrão no HTML e só aparecem aqui.
     document.getElementById('btn-nova-caixa-exp').style.display = '';
     document.getElementById('fab-nova-caixa-exp').style.display = '';
+    montarRelatorios('lista-relatorios', 'rel');
     carregarHistorico();
     carregarCaixas('lista-caixas');
     pollTimer = setInterval(() => { carregarHistorico(); carregarCaixas('lista-caixas'); }, 25000);
@@ -893,6 +913,12 @@ function boot() {
     roleEl.textContent = ehProducao ? 'Produção' : 'Almoxarifado';
     roleEl.className = ehProducao ? 'hrole r-prod' : 'hrole r-almox';
     document.getElementById('view-almoxarifado').style.display = 'block';
+    // Guia Relatórios: só Almoxarifado — Produção usa esta mesma tela, mas
+    // não tem acesso a relatórios.
+    if (!ehProducao) {
+      document.getElementById('almox-tabs').style.display = 'flex';
+      montarRelatorios('lista-relatorios-almox', 'rel-almox');
+    }
     carregarCaixas('lista-caixas-almox');
     pollTimer = setInterval(() => carregarCaixas('lista-caixas-almox'), 25000);
   } else if (PERFIL === 'expedicao_administrativo') {
@@ -904,6 +930,7 @@ function boot() {
     roleEl.className = 'hrole r-expadm';
     document.getElementById('expadm-tabs-wrap').style.display = 'block';
     trocarAbaExpAdm('expedicao');
+    montarRelatorios('lista-relatorios', 'rel');
     carregarHistorico();
     carregarCaixas('lista-caixas');
     carregarCampo();
@@ -1035,8 +1062,55 @@ function trocarAbaHistorico(tab) {
   abaHistoricoAtual = tab;
   document.getElementById('tab-carregamentos').classList.toggle('on', tab === 'carregamentos');
   document.getElementById('tab-caixas').classList.toggle('on', tab === 'caixas');
+  document.getElementById('tab-relatorios').classList.toggle('on', tab === 'relatorios');
   document.getElementById('lista-carregamentos').style.display = tab === 'carregamentos' ? 'block' : 'none';
   document.getElementById('lista-caixas').style.display = tab === 'caixas' ? 'block' : 'none';
+  document.getElementById('lista-relatorios').style.display = tab === 'relatorios' ? 'block' : 'none';
+}
+
+// Guias Caixas / Relatórios da tela do Almoxarifado (a tela de Expedição
+// usa trocarAbaHistorico acima).
+function trocarAbaAlmox(tab) {
+  document.getElementById('almox-tab-caixas').classList.toggle('on', tab === 'caixas');
+  document.getElementById('almox-tab-relatorios').classList.toggle('on', tab === 'relatorios');
+  document.getElementById('lista-caixas-almox').style.display = tab === 'caixas' ? 'block' : 'none';
+  document.getElementById('lista-relatorios-almox').style.display = tab === 'relatorios' ? 'block' : 'none';
+}
+
+// ── GUIA RELATÓRIOS ─────────────────────────────────────
+// Perfis Expedição, Almoxarifado e Expedição Administrativo. Por enquanto
+// só o frontend: escolher o relatório mostra os campos de filtro, ainda
+// sem botão/consulta — a geração do relatório vem depois.
+// `prefixo` evita ids duplicados entre as telas (Expedição x Almoxarifado).
+function montarRelatorios(containerId, prefixo) {
+  document.getElementById(containerId).innerHTML = `
+    <div class="rel-painel">
+      <div class="fg" style="margin-bottom:0"><label>Relatório</label></div>
+      <label class="rel-opcao" id="${prefixo}-opcao-estrutura">
+        <input type="radio" name="${prefixo}-tipo" value="estrutura-faltantes" onchange="selecionarRelatorio('${prefixo}')">
+        Relatório de estrutura de itens faltantes para envio
+      </label>
+      <div class="rel-campos" id="${prefixo}-campos" style="display:none">
+        <div class="fr2">
+          <div class="fg">
+            <label>Número do projeto</label>
+            <input id="${prefixo}-projeto" placeholder="Ex: 250492" maxlength="8" inputmode="numeric" oninput="this.value=this.value.replace(/\\D/g,'')">
+          </div>
+          <div class="fg">
+            <label>Código da estrutura</label>
+            <input id="${prefixo}-estrutura" placeholder="Ex: TCR500" maxlength="6" oninput="this.value=this.value.toUpperCase()">
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Mostra os campos do relatório escolhido e destaca a opção marcada.
+function selecionarRelatorio(prefixo) {
+  const marcado = document.querySelector(`input[name="${prefixo}-tipo"]:checked`);
+  document.getElementById(`${prefixo}-opcao-estrutura`).classList.toggle('on', !!marcado);
+  document.getElementById(`${prefixo}-campos`).style.display = marcado ? 'block' : 'none';
+  if (marcado) document.getElementById(`${prefixo}-projeto`).focus();
 }
 
 // ── EM CAMPO — DESEMBARQUE ──────────────────────────────
