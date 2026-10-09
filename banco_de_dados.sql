@@ -69,7 +69,7 @@ CREATE TABLE caixas (
   codigo_barras     VARCHAR(30)  NULL,
   status            ENUM('aberta', 'fechada', 'expedida') NOT NULL DEFAULT 'aberta',
   responsavel_nome  VARCHAR(150) NOT NULL,
-  numero_projeto    VARCHAR(50)  NULL,
+  numero_projeto    VARCHAR(50)  NOT NULL,
   observacoes       VARCHAR(500) NULL,
   criado_por_perfil ENUM('expedicao', 'em_campo', 'almoxarifado', 'producao') NOT NULL DEFAULT 'almoxarifado',
   criado_em         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

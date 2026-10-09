@@ -131,6 +131,11 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
     if (!responsavelValido(responsavel_nome, req.usuario.perfil)) {
       return res.status(400).json({ erro: 'Selecione um responsável válido.' });
     }
+    // Número do projeto obrigatório (coluna caixas.numero_projeto NOT NULL).
+    const numeroProjeto = String(numero_projeto || '').trim();
+    if (!numeroProjeto) {
+      return res.status(400).json({ erro: 'Informe o número do projeto da caixa.' });
+    }
     if (!Array.isArray(itens) || itens.length === 0) {
       return res.status(400).json({ erro: 'Inclua ao menos um item na caixa.' });
     }
@@ -149,7 +154,7 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
       const [result] = await conn.query(
         `INSERT INTO caixas (responsavel_nome, numero_projeto, observacoes, criado_por_perfil)
          VALUES (?, ?, ?, ?)`,
-        [responsavel_nome, (numero_projeto || '').trim() || null, observacoes || null, req.usuario.perfil]
+        [responsavel_nome, numeroProjeto, observacoes || null, req.usuario.perfil]
       );
       caixaId = result.insertId;
 

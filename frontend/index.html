@@ -608,7 +608,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 		  <option>Diter Doering</option>
         </select>
       </div>
-      <div class="fg"><label>Número do projeto</label><input id="cx-projeto" placeholder="Opcional — aparece na etiqueta impressa"></div>
+      <div class="fg"><label>Número do projeto *</label><input id="cx-projeto" placeholder="Obrigatório — aparece na etiqueta impressa"></div>
       <div class="fg"><label>Observações</label><textarea id="cx-obs" rows="2" placeholder="Opcional"></textarea></div>
 
       <div class="mat-head">
@@ -1528,7 +1528,7 @@ function abrirNovaCaixa() {
   // etiqueta) — só o texto do subtítulo muda pra indicar de onde saem
   // os itens.
   document.getElementById('mo-caixa-titulo').textContent = '🧰 Nova Caixa';
-  document.getElementById('cx-projeto').placeholder = 'Opcional — aparece na etiqueta impressa';
+  document.getElementById('cx-projeto').placeholder = 'Obrigatório — aparece na etiqueta impressa';
   document.getElementById('cx-subtitulo').textContent = (PERFIL === 'producao' ? 'Produção' : 'Almoxarifado')
     + ' → pátio da expedição. Confirme cada item pra salvar na hora, sem depender do botão final — evita perder leituras se o app fechar sem querer.';
   document.getElementById('btn-cancelar-caixa').textContent = 'Cancelar';
@@ -1620,6 +1620,13 @@ async function confirmarItemCaixa(idx) {
     toast('Selecione o responsável antes de confirmar o item.', true);
     return false;
   }
+  // O número do projeto é obrigatório — só vale checar antes da caixa
+  // existir (depois disso o campo fica travado, ver travarCabecalhoCaixa).
+  if (!caixaEmCriacaoId && !document.getElementById('cx-projeto').value.trim()) {
+    toast('Informe o número do projeto antes de confirmar o item.', true);
+    document.getElementById('cx-projeto').focus();
+    return false;
+  }
   it.codigo_item = codigo_item; it.descricao = descricao; it.quantidade = quantidade;
 
   const btn = document.getElementById(`btn-confirmar-caixa-${idx}`);
@@ -1630,7 +1637,7 @@ async function confirmarItemCaixa(idx) {
         const numero_projeto = document.getElementById('cx-projeto').value.trim();
         const observacoes = document.getElementById('cx-obs').value.trim();
         const data = await api('POST', apiBaseCaixaAtual(), {
-          responsavel_nome, numero_projeto: numero_projeto || null, observacoes: observacoes || null,
+          responsavel_nome, numero_projeto, observacoes: observacoes || null,
           itens: [{ codigo_item, descricao, quantidade }],
         });
         caixaEmCriacaoId = data.id;

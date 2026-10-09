@@ -309,6 +309,7 @@ mysql -u root -p burntech_expedicao < migrar_producao_para_caixas.sql  # Produç
 mysql -u root -p burntech_expedicao < alter_romaneio_impressao_fila.sql  # fila de impressão automática do romaneio de Produção (laser A4), agora ligada a caixas
 mysql -u root -p burntech_expedicao < alter_desembarque_observacoes.sql  # campo de observações opcionais no desembarque (perfil Em Campo)
 mysql -u root -p burntech_expedicao < alter_desenho_tecnico_lote.sql  # fila de impressão em lote de desenhos técnicos (perfil Pintura)
+mysql -u root -p burntech_expedicao < alter_caixas_numero_projeto_obrigatorio.sql  # número do projeto da caixa passa a ser obrigatório (NOT NULL) — leia o passo 1 do arquivo antes: caixas antigas sem projeto precisam ser corrigidas
 ```
 
 Se o banco já rodou os dois scripts marcados como "histórico" acima (ou seja, se as tabelas `romaneios_producao`/`romaneio_producao_itens`/`romaneio_producao_impressao_fila` existem), rode `migrar_producao_para_caixas.sql` por último — ele migra os dados dessas tabelas para `caixas`/`caixa_itens` e reaponta `desenho_tecnico_impressao_fila` para os novos itens. Se o banco nunca teve o perfil Produção rodando com essa estrutura antiga (instalação nova a partir do `banco_de_dados.sql` atual), **não precisa rodar `migrar_producao_para_caixas.sql`** — o schema novo já nasce correto.
