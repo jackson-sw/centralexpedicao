@@ -27,7 +27,7 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 - **Expedição Administrativo** (senha padrão: `Bioc!@09`) — reúne as telas de Expedição e Em Campo num só login, separadas por uma guia no topo. É o único perfil que permite digitar o código de um item manualmente (em vez de só escanear) e marcar/desmarcar itens do desembarque tocando direto na lista — os demais perfis só confirmam por leitura de código de barras.
 - **Pintura** (senha padrão: `Pint!@0026`) — perfil enxuto, sem caixa nem carregamento: só a tela "Imprimir Desenhos" (botão no mesmo canto usado por "+ Nova Caixa" nos outros perfis), que pede o projeto+estrutura (ex.: `250492-TCR500`) e manda buscar e imprimir TODOS os desenhos técnicos daquela estrutura de uma vez — ver [Impressão de desenhos em lote (perfil Pintura)](#impressão-de-desenhos-em-lote-perfil-pintura).
 
-Os perfis **Expedição**, **Almoxarifado** e **Expedição Administrativo** têm uma guia **Relatórios** (depois de "Caixas"; Produção não vê). Por enquanto é só a tela: ao marcar "Relatório de estrutura de itens faltantes para envio" aparecem os campos *Número do projeto* e *Código da estrutura* — a geração do relatório (backend) ainda não existe.
+Os perfis **Expedição**, **Almoxarifado** e **Expedição Administrativo** têm uma guia **Relatórios** (depois de "Caixas"; Produção não vê). Ao marcar "Relatório de estrutura de itens faltantes para envio" aparecem os campos *Número do projeto* (6 dígitos, ou 8 se for reforma) e *Código da estrutura* (ex.: `TCA100`) e o botão **Pesquisar** — ver [Relatório de estrutura de itens faltantes](#relatório-de-estrutura-de-itens-faltantes).
 
 Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` / `PINTURA_PASSWORD_HASH` em `backend/.env`:
 
@@ -195,6 +195,17 @@ WHERE TRY_CAST(oo.ORD_OrdemProjeto AS BIGINT) = TRY_CAST(@projeto AS BIGINT)
 ```
 
 Se não achar nenhuma linha (ou se o ERP estiver inacessível no momento), o item é recusado — por segurança, trata como "não pertence" em vez de deixar passar sem confirmação. Um código sem hífen (fora de qualquer padrão de estrutura) continua passando direto, sem checagem, como sempre foi.
+
+### Relatório de estrutura de itens faltantes
+
+Guia **Relatórios** (perfis Expedição, Almoxarifado e Expedição Administrativo): informa-se o número do projeto + o código da estrutura e clica em **Pesquisar** (`GET /api/relatorios/estrutura-faltantes?projeto=250614&estrutura=TCA100`, `backend/routes/relatorios.js`). O backend:
+
+1. Busca no ERP os itens da estrutura, filtrando `ORD_OrdemProduto LIKE '%projeto-estrutura%'` (`ORD_ORDEM` + `ORD_ORDEMPRVITEM` + `PRO_PRODUTO`) e pegando o código do item (`ORD_OrdemPrvItemProduto`), a descrição (`PRO_Descricao`) e a quantidade (`ORD_OrdemPrvItemQuantidade`). O mesmo código pode vir em várias linhas com quantidades diferentes — elas são **somadas**.
+2. Soma o que já foi carregado em **todos** os carregamentos daquele projeto (um projeto pode ter vários; os cancelados não contam). Quando o carregamento tem uma caixa inteira, entram os itens que estão dentro dela.
+3. Associa cada item carregado ao item da estrutura pelo código (`ACABRU-0001`) ou, nas etiquetas com posição (`250614-TCA100-0078`), pelo `ORD_OrdemProduto` + posição (comparada como número, `78` = `0078`). Itens carregados que não são dessa estrutura são ignorados.
+4. Devolve, por item: quantidade na estrutura, carregada e faltante (`max(estrutura − carregado, 0)`). A tela lista só os itens com falta, com a opção de mostrar também os completos.
+
+O cálculo fica em `backend/relatorioEstrutura.js` (função pura, sem acesso a banco).
 
 Para diagnosticar problemas de conexão sem precisar logar no app:
 

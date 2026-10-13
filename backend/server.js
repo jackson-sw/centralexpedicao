@@ -12,6 +12,7 @@ const desenhosTecnicosRoutes  = require('./routes/desenhosTecnicos');
 const desenhosTecnicosLoteRoutes = require('./routes/desenhosTecnicosLote');
 const itensMateriaisRoutes   = require('./routes/itensMateriais');
 const etiquetasRoutes        = require('./routes/etiquetas');
+const relatoriosRoutes       = require('./routes/relatorios');
 const { verificarConexao } = require('./mail');
 const { getPool: getPoolErp } = require('./dbErp');
 
@@ -65,6 +66,7 @@ app.use('/api/desenhos-tecnicos', desenhosTecnicosRoutes);
 app.use('/api/desenhos-tecnicos-lote', desenhosTecnicosLoteRoutes);
 app.use('/api/itens-materiais', itensMateriaisRoutes);
 app.use('/api/etiquetas',      etiquetasRoutes);
+app.use('/api/relatorios',     relatoriosRoutes);
 
 // ── Serve o frontend estático em produção ─────────────────────
 app.use(express.static(path.join(__dirname, '../frontend')));
