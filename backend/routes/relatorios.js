@@ -6,7 +6,7 @@ const { calcularFaltantes } = require('../relatorioEstrutura');
 
 // Relatórios — perfis Expedição, Almoxarifado e Expedição Administrativo
 // (mesmos que veem a guia "Relatórios" no frontend).
-const PERFIS_PERMITIDOS = ['expedicao', 'almoxarifado', 'expedicao_administrativo'];
+const PERFIS_PERMITIDOS = ['expedicao', 'almoxarifado', 'expedicao_administrativo', 'consulta'];
 
 function apenasPerfisDeRelatorio(req, res, next) {
   if (!PERFIS_PERMITIDOS.includes(req.usuario?.perfil)) {
