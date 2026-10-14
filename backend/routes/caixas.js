@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasMontagemCaixa } = require('../middleware/auth');
+const { auth, bloqueiaConsulta, apenasMontagemCaixa } = require('../middleware/auth');
 const { RESPONSAVEIS_POR_PERFIL } = require('../constants');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { montarPdfRomaneioCaixa } = require('../services/romaneioCaixa');
@@ -368,7 +368,7 @@ router.post('/:id/finalizar', auth, apenasMontagemCaixa, async (req, res) => {
 //      Desenhos" abaixo) — garante que o desenho sai sempre que o
 //      romaneio é (re)gerado, sem depender de lembrar de clicar no
 //      botão manual à parte.
-router.post('/:id/romaneio', auth, async (req, res) => {
+router.post('/:id/romaneio', auth, bloqueiaConsulta, async (req, res) => {
   try {
     const [[caixaStatus]] = await db.query('SELECT status, criado_por_perfil FROM caixas WHERE id = ?', [req.params.id]);
     if (!caixaStatus) return res.status(404).json({ erro: 'Caixa não encontrada.' });

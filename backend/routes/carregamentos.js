@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth, apenasExpedicao, apenasEmCampo, apenasExpedicaoAdministrativo } = require('../middleware/auth');
+const { auth, bloqueiaConsulta, apenasExpedicao, apenasEmCampo, apenasExpedicaoAdministrativo } = require('../middleware/auth');
 const { enviarEmail, sanitizarErroHeader } = require('../mail');
 const { gerarRomaneioCarregamentoPDF } = require('../pdf/romaneioCarregamento');
 const { gerarRomaneioFaltantesPDF } = require('../pdf/romaneioFaltantes');
@@ -342,7 +342,7 @@ router.post('/:id/finalizar', auth, apenasExpedicao, async (req, res) => {
 // e-mail e devolve o PDF na resposta para visualização/impressão
 // imediata. Só disponível depois de finalizado (mesma regra da
 // caixa: enquanto "em_andamento" a lista de itens ainda pode mudar).
-router.post('/:id/romaneio', auth, async (req, res) => {
+router.post('/:id/romaneio', auth, bloqueiaConsulta, async (req, res) => {
   try {
     const [[carregamento]] = await db.query('SELECT * FROM v_carregamentos_resumo WHERE id = ?', [req.params.id]);
     if (!carregamento) return res.status(404).json({ erro: 'Carregamento não encontrado.' });

@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db     = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, bloqueiaConsulta } = require('../middleware/auth');
 const { gerarEtiquetaPDF } = require('../pdf/etiqueta');
 
 // Só estes perfis têm impressora Argox configurada (uma para
@@ -32,7 +32,7 @@ function apenasAgente(req, res, next) {
 // caixa já finalizada (perfis Almoxarifado, Expedição e Produção). O
 // PDF em si só é gerado quando o agente local baixa o job (GET
 // /:id/pdf), então esta rota é rápida — só grava a intenção na fila.
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, bloqueiaConsulta, async (req, res) => {
   try {
     const perfil = req.usuario?.perfil;
     const impressora = IMPRESSORA_POR_PERFIL[perfil];

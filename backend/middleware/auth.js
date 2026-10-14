@@ -8,10 +8,29 @@ function auth(req, res, next) {
 
   try {
     req.usuario = jwt.verify(token, process.env.JWT_SECRET);
-    next();
   } catch {
     return res.status(401).json({ erro: 'Token inválido ou expirado.' });
   }
+
+  // Perfil "consulta" (agente de IA via API): somente leitura. Trava
+  // global — qualquer método diferente de GET/HEAD é recusado aqui, antes
+  // de chegar em qualquer rota protegida por `auth`.
+  if (req.usuario?.perfil === 'consulta' && !['GET', 'HEAD'].includes(req.method)) {
+    return res.status(403).json({ erro: 'Perfil de consulta é somente leitura.' });
+  }
+  next();
+}
+
+// Bloqueio explícito do perfil "consulta" em rotas que, mesmo sendo
+// POST, têm efeito externo (enviam e-mail ou imprimem etiqueta):
+// POST /api/carregamentos/:id/romaneio, POST /api/caixas/:id/romaneio e
+// POST /api/etiquetas. Redundante com a trava global acima (defesa em
+// profundidade: continua valendo se alguém afrouxar a regra geral).
+function bloqueiaConsulta(req, res, next) {
+  if (req.usuario?.perfil === 'consulta') {
+    return res.status(403).json({ erro: 'Perfil de consulta não pode enviar e-mail nem imprimir.' });
+  }
+  next();
 }
 
 // Bloqueio: só o perfil Expedição pode registrar novos carregamentos.
@@ -80,4 +99,4 @@ function apenasPintura(req, res, next) {
   next();
 }
 
-module.exports = { auth, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo, apenasPintura };
+module.exports = { auth, bloqueiaConsulta, apenasExpedicao, apenasMontagemCaixa, apenasEmCampo, apenasAdmin, apenasExpedicaoAdministrativo, apenasPintura };
