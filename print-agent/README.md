@@ -115,6 +115,8 @@ Tarefas já resolve bem para este caso.
   `SELECT * FROM romaneio_impressao_fila WHERE status='pendente'`,
   conforme o caso) e se o `AGENT_API_KEY` bate exatamente com o do
   servidor (chave errada dá HTTP 401 nos logs do agente).
+- **`Command failed: ...SumatraPDF... -print-to Argox-expedicao ...` num computador que não tem essa impressora** — acontece quando há um agente em cada computador (Almoxarifado e Expedição) sem filtro: o agente do Almoxarifado pega também os jobs da Argox da Expedição e falha. O caminho `C:\Users\...\Temp\etiqueta-N.pdf` é só o temporário do computador onde o agente roda, não é um erro. Solução: em cada computador, defina `IMPRESSORAS_LOCAIS` no `.env` do agente (ex.: `Argox-Almoxarifado` no Almoxarifado, `Argox-expedicao` na Expedição) e reinicie o agente. Cada computador precisa rodar o seu próprio agente.
+- **A impressora usada depende do perfil logado, não da caixa** — o botão Reimprimir / a impressão ao finalizar manda para a Argox do perfil de quem clicou (Expedição → `Argox-expedicao`, Almoxarifado e Produção → `Argox-Almoxarifado`). Reimprimir uma caixa do Almoxarifado logado como Expedição sai na Argox da Expedição.
 - **Erro ao imprimir mencionando o nome da impressora** — o nome
   configurado no servidor (`IMPRESSORA_ALMOXARIFADO_NOME` /
   `IMPRESSORA_EXPEDICAO_NOME` / `IMPRESSORA_ROMANEIO_NOME`) tem que ser

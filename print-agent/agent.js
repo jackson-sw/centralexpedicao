@@ -33,6 +33,24 @@ if (!AGENT_API_KEY) {
   process.exit(1);
 }
 
+// IMPRESSORAS_LOCAIS (opcional): nomes das impressoras ligadas A ESTE
+// computador, separados por vírgula (ex.: "Argox-expedicao"). O backend
+// devolve os jobs de TODAS as impressoras; com mais de um computador
+// rodando este agente (um no Almoxarifado, outro na Expedição), cada um
+// só deve pegar os jobs das suas impressoras — senão um tenta imprimir
+// na impressora do outro, falha ("Command failed ... -print-to ...") e
+// marca o job como erro. Vazio = pega tudo (comportamento antigo, para
+// um único computador-ponte com todas as impressoras).
+const IMPRESSORAS_LOCAIS = (process.env.IMPRESSORAS_LOCAIS || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+function jobEhDesteComputador(job) {
+  if (!IMPRESSORAS_LOCAIS.length || !job.impressora) return true;
+  return IMPRESSORAS_LOCAIS.includes(String(job.impressora).trim().toLowerCase());
+}
+
 function log(...args) {
   console.log(`[${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]`, ...args);
 }
@@ -129,6 +147,7 @@ async function ciclo() {
     for (const fila of FILAS) {
       const pendentes = await buscarPendentes(fila.base);
       for (const job of pendentes) {
+        if (!jobEhDesteComputador(job)) continue; // é de outro computador-ponte
         await processarJob(fila, job);
       }
     }
@@ -139,6 +158,7 @@ async function ciclo() {
   }
 }
 
+if (IMPRESSORAS_LOCAIS.length) log(`Só imprime jobs destas impressoras: ${IMPRESSORAS_LOCAIS.join(', ')}.`);
 log(`Agente de impressão iniciado. Consultando ${API_URL} a cada ${POLL_INTERVAL_MS / 1000}s (filas: ${FILAS.map((f) => f.nome).join(', ')}).`);
 ciclo();
 setInterval(ciclo, POLL_INTERVAL_MS);
