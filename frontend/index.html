@@ -1085,9 +1085,13 @@ function montarRelatorios(containerId, prefixo) {
   document.getElementById(containerId).innerHTML = `
     <div class="rel-painel">
       <div class="fg" style="margin-bottom:0"><label>Relatório</label></div>
-      <label class="rel-opcao" id="${prefixo}-opcao-estrutura">
+      <label class="rel-opcao" id="${prefixo}-opcao-estrutura-faltantes">
         <input type="radio" name="${prefixo}-tipo" value="estrutura-faltantes" onchange="selecionarRelatorio('${prefixo}')">
         Relatório de estrutura de itens faltantes para envio
+      </label>
+      <label class="rel-opcao" id="${prefixo}-opcao-estrutura-projeto">
+        <input type="radio" name="${prefixo}-tipo" value="estrutura-projeto" onchange="selecionarRelatorio('${prefixo}')">
+        Relatório de estrutura
       </label>
       <div class="rel-campos" id="${prefixo}-campos" style="display:none">
         <div class="fr2">
@@ -1095,15 +1099,23 @@ function montarRelatorios(containerId, prefixo) {
             <label>Número do projeto</label>
             <input id="${prefixo}-projeto" placeholder="Ex: 250492" maxlength="8" inputmode="numeric" oninput="this.value=this.value.replace(/\\D/g,'')" onkeydown="if(event.key==='Enter')pesquisarRelatorio('${prefixo}')">
           </div>
-          <div class="fg">
+          <div class="fg" id="${prefixo}-grupo-estrutura">
             <label>Código da estrutura</label>
             <input id="${prefixo}-estrutura" placeholder="Ex: TCR500" maxlength="6" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')pesquisarRelatorio('${prefixo}')">
           </div>
         </div>
-        <button class="btn btn-blue" id="${prefixo}-pesquisar" onclick="pesquisarRelatorio('${prefixo}')">🔍 Pesquisar</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-blue" id="${prefixo}-pesquisar" onclick="pesquisarRelatorio('${prefixo}')">🔍 Pesquisar</button>
+          <button class="btn btn-out" id="${prefixo}-pdf" onclick="gerarPdfRelatorio('${prefixo}')">📄 Gerar PDF</button>
+        </div>
         <div id="${prefixo}-resultado" style="margin-top:16px"></div>
       </div>
     </div>`;
+}
+
+function tipoRelatorio(prefixo) {
+  const m = document.querySelector(`input[name="${prefixo}-tipo"]:checked`);
+  return m ? m.value : null;
 }
 
 // Pesquisa o relatório "estrutura de itens faltantes para envio": o
@@ -1111,16 +1123,18 @@ function montarRelatorios(containerId, prefixo) {
 // que já foi carregado em Carregamentos do projeto (todos os
 // carregamentos do projeto, inclusive o conteúdo das caixas).
 async function pesquisarRelatorio(prefixo) {
+  const tipo = tipoRelatorio(prefixo);
   const projeto = document.getElementById(`${prefixo}-projeto`).value.trim();
   const estrutura = document.getElementById(`${prefixo}-estrutura`).value.trim().toUpperCase();
   const box = document.getElementById(`${prefixo}-resultado`);
   const btn = document.getElementById(`${prefixo}-pesquisar`);
+  if (!tipo) return;
 
   if (!/^\d{6}(\d{2})?$/.test(projeto)) {
     toast('Informe o número do projeto com 6 dígitos (ou 8, se for reforma).', true);
     return;
   }
-  if (!/^[A-Z]{3}\d+$/.test(estrutura)) {
+  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}\d+$/.test(estrutura)) {
     toast('Informe o código da estrutura (3 letras + número, ex.: TCA100).', true);
     return;
   }
@@ -1128,14 +1142,66 @@ async function pesquisarRelatorio(prefixo) {
   btn.disabled = true; btn.textContent = 'Pesquisando...';
   box.innerHTML = '<div class="loading"><div class="spinner"></div>Consultando o ERP...</div>';
   try {
-    const r = await api('GET', `/relatorios/estrutura-faltantes?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}`);
-    relatorioResultados[prefixo] = r;
-    renderRelatorioFaltantes(prefixo);
+    if (tipo === 'estrutura-projeto') {
+      const r = await api('GET', `/relatorios/estrutura-projeto?projeto=${encodeURIComponent(projeto)}`);
+      relatorioResultados[prefixo] = r;
+      renderRelatorioEstruturaProjeto(prefixo);
+    } else {
+      const r = await api('GET', `/relatorios/estrutura-faltantes?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}`);
+      relatorioResultados[prefixo] = r;
+      renderRelatorioFaltantes(prefixo);
+    }
   } catch (e) {
     relatorioResultados[prefixo] = null;
     box.innerHTML = `<div class="empty-box" style="padding:28px 16px"><div class="empty-icon">⚠️</div><div class="empty-title">${escapeHtml(e.message)}</div></div>`;
   } finally {
     btn.disabled = false; btn.textContent = '🔍 Pesquisar';
+  }
+}
+
+// Gera o PDF do relatório escolhido (mesmos filtros da tela; respeita a
+// opção "Mostrar também os itens já completos"). O PDF vem do backend
+// (?formato=pdf), que refaz a consulta — não depende de já ter pesquisado.
+async function gerarPdfRelatorio(prefixo) {
+  const tipo = tipoRelatorio(prefixo);
+  const projeto = document.getElementById(`${prefixo}-projeto`).value.trim();
+  const estrutura = document.getElementById(`${prefixo}-estrutura`).value.trim().toUpperCase();
+  const btn = document.getElementById(`${prefixo}-pdf`);
+  if (!tipo) return;
+
+  if (!/^\d{6}(\d{2})?$/.test(projeto)) {
+    toast('Informe o número do projeto com 6 dígitos (ou 8, se for reforma).', true);
+    return;
+  }
+  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}\d+$/.test(estrutura)) {
+    toast('Informe o código da estrutura (3 letras + número, ex.: TCA100).', true);
+    return;
+  }
+
+  const todos = !!(document.getElementById(`${prefixo}-todos`) || {}).checked;
+  const path = tipo === 'estrutura-projeto'
+    ? `/relatorios/estrutura-projeto?projeto=${encodeURIComponent(projeto)}&formato=pdf&todos=${todos ? 1 : 0}`
+    : `/relatorios/estrutura-faltantes?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}&formato=pdf&todos=${todos ? 1 : 0}`;
+  const nome = tipo === 'estrutura-projeto' ? `relatorio-estrutura-${projeto}.pdf` : `estrutura-faltantes-${projeto}-${estrutura}.pdf`;
+
+  btn.disabled = true; btn.textContent = 'Gerando...';
+  try {
+    const resp = await fetch(API + path, { headers: TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {} });
+    if (!resp.ok) {
+      let msg = 'Erro ao gerar o PDF.';
+      try { const d = await resp.json(); msg = d.erro || msg; } catch {}
+      throw new Error(msg);
+    }
+    const url = URL.createObjectURL(await resp.blob());
+    const a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('PDF gerado.');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '📄 Gerar PDF';
   }
 }
 
@@ -1180,12 +1246,63 @@ function renderRelatorioFaltantes(prefixo) {
     </div>` : `<div class="empty-box" style="padding:28px 16px"><div class="empty-icon">✅</div><div class="empty-title">Nenhum item faltando</div><div class="empty-sub">Tudo o que a estrutura pede já foi carregado.</div></div>`}`;
 }
 
+// Relatório de estrutura (projeto inteiro): um bloco por estrutura do
+// projeto, comparando o que ela pede com o que já foi carregado.
+function renderRelatorioEstruturaProjeto(prefixo) {
+  const r = relatorioResultados[prefixo];
+  const box = document.getElementById(`${prefixo}-resultado`);
+  if (!r || !r.estruturas) return;
+  const mostrarTodos = !!(document.getElementById(`${prefixo}-todos`) || {}).checked;
+  const t = r.resumo;
+
+  const blocos = r.estruturas.map(e => {
+    const linhas = mostrarTodos ? e.itens : e.itens.filter(i => i.faltante > 0);
+    if (!linhas.length && !mostrarTodos) return '';
+    return `
+      <div style="margin-top:18px">
+        <div style="font-weight:800;font-size:13.5px;margin-bottom:4px">${escapeHtml(e.codigo)}${e.descricao ? ' — ' + escapeHtml(e.descricao) : ''}
+          <span style="font-weight:600;color:var(--muted);font-size:12px">· ${e.resumo.total} ${e.resumo.total === 1 ? 'item' : 'itens'} · ${e.resumo.com_falta} com falta</span></div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:left;color:var(--muted);font-size:11.5px;text-transform:uppercase">
+              <th style="padding:8px 6px">Código</th><th style="padding:8px 6px">Descrição</th><th style="padding:8px 6px">Und</th>
+              <th style="padding:8px 6px;text-align:right">Estrutura</th><th style="padding:8px 6px;text-align:right">Carregado</th><th style="padding:8px 6px;text-align:right">Faltante</th>
+            </tr></thead>
+            <tbody>${linhas.map(i => `
+              <tr style="border-top:1px solid var(--border)">
+                <td style="padding:8px 6px;font-family:monospace;font-weight:700">${escapeHtml(i.codigo)}</td>
+                <td style="padding:8px 6px">${escapeHtml(i.descricao)}</td>
+                <td style="padding:8px 6px">${escapeHtml(i.und || '')}</td>
+                <td style="padding:8px 6px;text-align:right">${fmtQtd(i.necessario)}</td>
+                <td style="padding:8px 6px;text-align:right">${fmtQtd(i.carregado)}</td>
+                <td style="padding:8px 6px;text-align:right;font-weight:800;color:${i.faltante > 0 ? 'var(--red-dark)' : '#166534'}">${fmtQtd(i.faltante)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="fg" style="margin-bottom:8px"><label>Projeto ${escapeHtml(r.projeto)} — ${t.estruturas} ${t.estruturas === 1 ? 'estrutura' : 'estruturas'} · ${t.itens} itens · ${t.com_falta} com falta · ${t.completos} completos</label></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px;cursor:pointer">
+      <input type="checkbox" id="${prefixo}-todos" style="width:auto;padding:0;margin:0" ${mostrarTodos ? 'checked' : ''} onchange="renderRelatorioEstruturaProjeto('${prefixo}')">
+      Mostrar também os itens já completos
+    </label>
+    ${blocos || `<div class="empty-box" style="padding:28px 16px"><div class="empty-icon">✅</div><div class="empty-title">Nenhum item faltando</div><div class="empty-sub">Tudo o que as estruturas do projeto pedem já foi carregado.</div></div>`}`;
+}
+
 // Mostra os campos do relatório escolhido e destaca a opção marcada.
 function selecionarRelatorio(prefixo) {
-  const marcado = document.querySelector(`input[name="${prefixo}-tipo"]:checked`);
-  document.getElementById(`${prefixo}-opcao-estrutura`).classList.toggle('on', !!marcado);
-  document.getElementById(`${prefixo}-campos`).style.display = marcado ? 'block' : 'none';
-  if (marcado) document.getElementById(`${prefixo}-projeto`).focus();
+  const tipo = tipoRelatorio(prefixo);
+  for (const t of ['estrutura-faltantes', 'estrutura-projeto']) {
+    document.getElementById(`${prefixo}-opcao-${t}`).classList.toggle('on', tipo === t);
+  }
+  document.getElementById(`${prefixo}-campos`).style.display = tipo ? 'block' : 'none';
+  document.getElementById(`${prefixo}-grupo-estrutura`).style.display = tipo === 'estrutura-faltantes' ? '' : 'none';
+  document.getElementById(`${prefixo}-resultado`).innerHTML = '';
+  relatorioResultados[prefixo] = null;
+  if (tipo) document.getElementById(`${prefixo}-projeto`).focus();
 }
 
 // ── EM CAMPO — DESEMBARQUE ──────────────────────────────

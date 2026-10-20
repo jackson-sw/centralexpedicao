@@ -209,6 +209,18 @@ Guia **Relatórios** (perfis Expedição, Almoxarifado e Expedição Administrat
 
 O cálculo fica em `backend/relatorioEstrutura.js` (função pura, sem acesso a banco).
 
+### Relatório de estrutura (projeto inteiro)
+
+Segunda opção da guia **Relatórios**: só o *Número do projeto* e **Pesquisar** (`GET /api/relatorios/estrutura-projeto?projeto=250614`). Faz o mesmo processo do relatório de faltantes, mas para **todas as estruturas do projeto**, com um bloco por estrutura:
+
+1. `ENG_ESTRUTURA` com `ENG_EstruturaProjeto = projeto`, só a maior revisão (`ENG_EstruturaNumero`) de cada estrutura (`comandos sql/Eng_estruturacompleta.txt`).
+2. Itens de cada estrutura em `ENG_ESTRUTURAITEM` (mesmo `ENG_EstruturaProduto` e mesma revisão), com a descrição de `PRO_PRODUTO` — numa única consulta, com a quantidade somada por item.
+3. Compara com o carregado do projeto (mesmas regras do relatório de faltantes). Etiquetas com posição (`250614-TCA100-0078`) vão direto para a estrutura do prefixo; um código de item puro que exista em mais de uma estrutura é distribuído na ordem do código da estrutura, cada uma recebendo no máximo o que ainda precisa.
+
+A tela lista só os itens com falta por estrutura, com a opção de mostrar também os completos. O cálculo fica em `calcularFaltantesProjeto` (`backend/relatorioEstrutura.js`).
+
+**Gerar PDF:** os dois relatórios da guia têm, ao lado de **Pesquisar**, o botão **📄 Gerar PDF**, que baixa o relatório com os mesmos filtros (e respeitando "Mostrar também os itens já completos"). O PDF vem do próprio endpoint com `?formato=pdf` (e `&todos=1` para incluir os completos), gerado em `backend/pdf/relatorioEstrutura.js`.
+
 Para diagnosticar problemas de conexão sem precisar logar no app:
 
 ```bash

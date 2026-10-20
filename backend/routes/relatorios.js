@@ -2,7 +2,19 @@ const router = require('express').Router();
 const db = require('../db');
 const { sql, getPool } = require('../dbErp');
 const { auth } = require('../middleware/auth');
-const { calcularFaltantes } = require('../relatorioEstrutura');
+const { calcularFaltantes, calcularFaltantesProjeto } = require('../relatorioEstrutura');
+const { gerarRelatorioEstruturaPDF } = require('../pdf/relatorioEstrutura');
+
+// ?formato=pdf devolve o relatório em PDF (download) em vez de JSON;
+// ?todos=1 inclui também os itens já completos (padrão: só os com falta).
+function querPdf(req) { return String(req.query.formato || '').toLowerCase() === 'pdf'; }
+function querTodos(req) { return ['1', 'true'].includes(String(req.query.todos || '').toLowerCase()); }
+
+function enviarPdf(res, buffer, nomeArquivo) {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+  res.send(buffer);
+}
 
 // Relatórios — perfis Expedição, Almoxarifado e Expedição Administrativo
 // (mesmos que veem a guia "Relatórios" no frontend).
@@ -124,9 +136,142 @@ router.get('/estrutura-faltantes', auth, apenasPerfisDeRelatorio, async (req, re
     const [carregados] = await db.query(SELECT_CARREGADOS, [projeto, projeto]);
     const { itens, resumo } = calcularFaltantes(itensErp, carregados, posicoes);
 
+    if (querPdf(req)) {
+      const todos = querTodos(req);
+      const pdf = await gerarRelatorioEstruturaPDF({
+        titulo: 'ITENS FALTANTES PARA ENVIO',
+        projeto,
+        resumo: `${projeto}-${estrutura}: ${resumo.total} ${resumo.total === 1 ? 'item' : 'itens'} na estrutura · ${resumo.com_falta} com falta · ${resumo.completos} completos`,
+        semFalta: resumo.com_falta === 0,
+        mostrarTodos: todos,
+        grupos: [{ titulo: `${projeto}-${estrutura}`, itens: todos ? itens : itens.filter((i) => i.faltante > 0) }],
+      });
+      return enviarPdf(res, pdf, `estrutura-faltantes-${projeto}-${estrutura}.pdf`);
+    }
+
     res.json({ projeto, estrutura, resumo, itens });
   } catch (err) {
     console.error('[GET /relatorios/estrutura-faltantes]', err.message);
+    res.status(500).json({ erro: 'Erro ao gerar o relatório.' });
+  }
+});
+
+// ── Relatório de estrutura (projeto inteiro) ─────────────────
+// Mesmo processo do relatório de itens faltantes, mas para TODAS as
+// estruturas do projeto (só o número do projeto é informado).
+
+// Estruturas do projeto (ENG_ESTRUTURA), só a maior revisão de cada uma
+// — comando em "comandos sql/Eng_estruturacompleta.txt".
+const SELECT_ESTRUTURAS_PROJETO = `
+  SELECT
+    RTRIM(ees.ENG_EstruturaProduto)    AS codigo,
+    ees.ENG_EstruturaNumero            AS numero,
+    RTRIM(ees.ENG_EstruturaDescricao)  AS descricao
+  FROM ENG_ESTRUTURA AS ees
+  WHERE ees.ENG_EstruturaProjeto = @projeto
+    AND ees.ENG_EstruturaNumero = (
+      SELECT MAX(e2.ENG_EstruturaNumero)
+      FROM ENG_ESTRUTURA AS e2
+      WHERE e2.ENG_EstruturaProduto = ees.ENG_EstruturaProduto
+    )
+`;
+
+// Itens de todas essas estruturas de uma vez (em vez de uma consulta por
+// estrutura): ENG_ESTRUTURAITEM pelo código da estrutura E pela mesma
+// revisão, + descrição em PRO_PRODUTO. Quantidade somada por item.
+const SELECT_ITENS_ESTRUTURAS_PROJETO = `
+  SELECT
+    RTRIM(ees.ENG_EstruturaProduto)         AS estrutura,
+    RTRIM(ei.ENG_EstruturaItemProduto)      AS codigo,
+    RTRIM(pp.PRO_Descricao)                 AS descricao,
+    MAX(RTRIM(ei.ENG_EstruturaItemDimUnd))  AS und,
+    SUM(ei.ENG_EstruturaItemQuantidade)     AS quantidade
+  FROM ENG_ESTRUTURA AS ees
+  JOIN ENG_ESTRUTURAITEM AS ei
+    ON ei.ENG_EstruturaProduto = ees.ENG_EstruturaProduto
+   AND ei.ENG_EstruturaNumero  = ees.ENG_EstruturaNumero
+  JOIN PRO_PRODUTO AS pp
+    ON pp.PRO_Codigo = ei.ENG_EstruturaItemProduto
+  WHERE ees.ENG_EstruturaProjeto = @projeto
+    AND ees.ENG_EstruturaNumero = (
+      SELECT MAX(e2.ENG_EstruturaNumero)
+      FROM ENG_ESTRUTURA AS e2
+      WHERE e2.ENG_EstruturaProduto = ees.ENG_EstruturaProduto
+    )
+  GROUP BY RTRIM(ees.ENG_EstruturaProduto), RTRIM(ei.ENG_EstruturaItemProduto), RTRIM(pp.PRO_Descricao)
+`;
+
+// Posição → item nas ordens de produção do projeto (para etiquetas
+// "projeto-estrutura-posição"). ORD_OrdemProduto = código da estrutura.
+const SELECT_POSICOES_PROJETO = `
+  SELECT
+    RTRIM(oo.ORD_OrdemProduto)         AS ordem_produto,
+    RTRIM(oi.ORD_OrdemPrvItemProduto)  AS codigo,
+    RTRIM(oi.ORD_OrdemPrvItemPosicao)  AS posicao
+  FROM ORD_ORDEM AS oo
+  JOIN ORD_ORDEMPRVITEM AS oi
+    ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
+  WHERE oo.ORD_OrdemProduto LIKE @chave
+`;
+
+// GET /api/relatorios/estrutura-projeto?projeto=250614
+router.get('/estrutura-projeto', auth, apenasPerfisDeRelatorio, async (req, res) => {
+  const projeto = String(req.query.projeto || '').trim();
+  if (!PADRAO_PROJETO.test(projeto)) {
+    return res.status(400).json({ erro: 'Informe o número do projeto com 6 dígitos (ou 8, se for reforma).' });
+  }
+
+  try {
+    const pool = await getPool();
+    const { recordset: estruturasErp } = await pool.request()
+      .input('projeto', sql.NVarChar, projeto)
+      .query(SELECT_ESTRUTURAS_PROJETO);
+
+    if (!estruturasErp.length) {
+      return res.status(404).json({ erro: `Nenhuma estrutura encontrada no ERP para o projeto ${projeto}.` });
+    }
+
+    const { recordset: itensErp } = await pool.request()
+      .input('projeto', sql.NVarChar, projeto)
+      .query(SELECT_ITENS_ESTRUTURAS_PROJETO);
+
+    const { recordset: posicoes } = await pool.request()
+      .input('chave', sql.NVarChar, `${projeto}-%`)
+      .query(SELECT_POSICOES_PROJETO);
+
+    const estruturas = estruturasErp.map((e) => ({
+      codigo: e.codigo,
+      descricao: e.descricao,
+      itens: itensErp.filter((i) => i.estrutura === e.codigo),
+    }));
+
+    const [carregados] = await db.query(SELECT_CARREGADOS, [projeto, projeto]);
+    const resultado = calcularFaltantesProjeto(estruturas, carregados, posicoes);
+
+    if (querPdf(req)) {
+      const todos = querTodos(req);
+      const t = resultado.resumo;
+      const grupos = resultado.estruturas
+        .map((e) => ({
+          titulo: e.codigo,
+          subtitulo: `${e.descricao ? e.descricao + ' · ' : ''}${e.resumo.total} ${e.resumo.total === 1 ? 'item' : 'itens'} · ${e.resumo.com_falta} com falta`,
+          itens: todos ? e.itens : e.itens.filter((i) => i.faltante > 0),
+        }))
+        .filter((g) => todos || g.itens.length);
+      const pdf = await gerarRelatorioEstruturaPDF({
+        titulo: 'RELATÓRIO DE ESTRUTURA',
+        projeto,
+        resumo: `${t.estruturas} ${t.estruturas === 1 ? 'estrutura' : 'estruturas'} · ${t.itens} itens · ${t.com_falta} com falta · ${t.completos} completos`,
+        semFalta: t.com_falta === 0,
+        mostrarTodos: todos,
+        grupos,
+      });
+      return enviarPdf(res, pdf, `relatorio-estrutura-${projeto}.pdf`);
+    }
+
+    res.json({ projeto, ...resultado });
+  } catch (err) {
+    console.error('[GET /relatorios/estrutura-projeto]', err.message);
     res.status(500).json({ erro: 'Erro ao gerar o relatório.' });
   }
 });
