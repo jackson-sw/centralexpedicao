@@ -1,0 +1,13 @@
+SELECT ee.ENG_EstruturaProduto
+      ,ee.ENG_EstruturaNumero
+      ,ee.ENG_EstruturaItemSeq
+      ,ee.ENG_EstruturaItemPosicao
+      ,ee.ENG_EstruturaItemProduto
+	  ,pp.PRO_Descricao
+	  ,ee.ENG_EstruturaItemQuantidade
+      ,ee.ENG_EstruturaItemDimUnd
+  FROM ENG_ESTRUTURAITEM as ee
+  JOIN PRO_PRODUTO as pp
+  on ee.ENG_EstruturaItemProduto = pp.PRO_Codigo
+  WHERE ee.ENG_EstruturaProduto LIKE '%265545-dtv001%'
+  ORDER BY ee.ENG_EstruturaItemSeq

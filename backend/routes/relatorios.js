@@ -20,23 +20,46 @@ function apenasPerfisDeRelatorio(req, res, next) {
 const PADRAO_PROJETO = /^\d{6}(?:\d{2})?$/;
 const PADRAO_ESTRUTURA = /^[A-Za-z]{3}\d+$/;
 
-// Itens da estrutura no ERP — mesma consulta usada em outros pontos do
-// sistema (ORD_ORDEM + ORD_ORDEMPRVITEM + PRO_PRODUTO), filtrando pela
-// coluna ORD_OrdemProduto ("projeto-estrutura", ex.: 250614-TCA100) com
-// LIKE, como definido pelo usuário. O valor já foi validado pelos
-// padrões acima (só dígitos/letras), então não há curinga indevido.
+// Itens (e quantidades) que a estrutura precisa, vindos da ENGENHARIA
+// (ENG_ESTRUTURAITEM + PRO_PRODUTO), filtrando por ENG_EstruturaProduto
+// ("projeto-estrutura", ex.: 250614-TCA100) com LIKE. O valor já foi
+// validado pelos padrões acima (só dígitos/letras), então não há curinga
+// indevido.
+//
+// ENG_EstruturaNumero é a revisão da estrutura (1, 2, 3...): só vale a
+// MAIOR revisão de cada estrutura — as anteriores trazem quantidades
+// antigas/duplicadas do mesmo item. Dentro da revisão válida, o mesmo
+// item pode aparecer em mais de uma linha (posições diferentes), então
+// a quantidade é somada por item.
 const SELECT_ITENS_ESTRUTURA = `
+  SELECT
+    RTRIM(ee.ENG_EstruturaItemProduto)    AS codigo,
+    RTRIM(pp.PRO_Descricao)               AS descricao,
+    SUM(ee.ENG_EstruturaItemQuantidade)   AS quantidade
+  FROM ENG_ESTRUTURAITEM AS ee
+  JOIN PRO_PRODUTO AS pp
+    ON pp.PRO_Codigo = ee.ENG_EstruturaItemProduto
+  WHERE ee.ENG_EstruturaProduto LIKE @chave
+    AND ee.ENG_EstruturaNumero = (
+      SELECT MAX(e2.ENG_EstruturaNumero)
+      FROM ENG_ESTRUTURAITEM AS e2
+      WHERE e2.ENG_EstruturaProduto = ee.ENG_EstruturaProduto
+    )
+  GROUP BY RTRIM(ee.ENG_EstruturaItemProduto), RTRIM(pp.PRO_Descricao)
+`;
+
+// Posição de cada item na ordem de produção (ORD_ORDEM + ORD_ORDEMPRVITEM).
+// Serve só para associar etiquetas no formato "projeto-estrutura-posição"
+// (ex.: 250614-TCA100-0078, que não traz o código do item) ao item
+// certo da estrutura — as quantidades vêm da engenharia, acima.
+const SELECT_POSICOES = `
   SELECT
     RTRIM(oo.ORD_OrdemProduto)         AS ordem_produto,
     RTRIM(oi.ORD_OrdemPrvItemProduto)  AS codigo,
-    RTRIM(pp.PRO_Descricao)            AS descricao,
-    oi.ORD_OrdemPrvItemQuantidade      AS quantidade,
     RTRIM(oi.ORD_OrdemPrvItemPosicao)  AS posicao
   FROM ORD_ORDEM AS oo
   JOIN ORD_ORDEMPRVITEM AS oi
     ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
-  JOIN PRO_PRODUTO AS pp
-    ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
   WHERE oo.ORD_OrdemProduto LIKE @chave
 `;
 
@@ -84,16 +107,21 @@ router.get('/estrutura-faltantes', auth, apenasPerfisDeRelatorio, async (req, re
 
   try {
     const pool = await getPool();
-    const request = pool.request();
-    request.input('chave', sql.NVarChar, `%${projeto}-${estrutura}%`);
-    const { recordset: itensErp } = await request.query(SELECT_ITENS_ESTRUTURA);
+    const chave = `%${projeto}-${estrutura}%`;
+    const { recordset: itensErp } = await pool.request()
+      .input('chave', sql.NVarChar, chave)
+      .query(SELECT_ITENS_ESTRUTURA);
 
     if (!itensErp.length) {
       return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}.` });
     }
 
+    const { recordset: posicoes } = await pool.request()
+      .input('chave', sql.NVarChar, chave)
+      .query(SELECT_POSICOES);
+
     const [carregados] = await db.query(SELECT_CARREGADOS, [projeto, projeto]);
-    const { itens, resumo } = calcularFaltantes(itensErp, carregados);
+    const { itens, resumo } = calcularFaltantes(itensErp, carregados, posicoes);
 
     res.json({ projeto, estrutura, resumo, itens });
   } catch (err) {

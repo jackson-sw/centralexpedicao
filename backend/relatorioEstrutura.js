@@ -29,7 +29,13 @@ function arredonda(n) {
 //      (comparada como número, "78" = "0078").
 // Códigos que não se associam a nenhum item da estrutura (peças de
 // outras estruturas do mesmo projeto, por exemplo) são ignorados.
-function calcularFaltantes(itensErp, carregados) {
+//
+// posicoes (opcional): [{ ordem_produto, codigo, posicao }] — mapa de
+// posição → código do item (ordem de produção). Quando informado, é ele
+// que alimenta a associação por posição (as quantidades vêm de itensErp,
+// da engenharia, que não tem a posição da ordem). Sem ele, usa
+// ordem_produto/posicao de itensErp, como antes.
+function calcularFaltantes(itensErp, carregados, posicoes) {
   const porCodigo = new Map();   // CÓDIGO_NORMALIZADO -> { codigo, descricao, necessario, carregado }
   const porPosicao = new Map();  // "ORDEM_PRODUTO|posição" -> CÓDIGO_NORMALIZADO
 
@@ -47,6 +53,13 @@ function calcularFaltantes(itensErp, carregados) {
 
     const pos = parseInt(it.posicao, 10);
     if (Number.isFinite(pos)) porPosicao.set(`${norm(it.ordem_produto)}|${pos}`, chave);
+  }
+
+  for (const p of posicoes || []) {
+    const chave = norm(p.codigo);
+    const pos = parseInt(p.posicao, 10);
+    // só associa a itens que existem na estrutura da engenharia
+    if (porCodigo.has(chave) && Number.isFinite(pos)) porPosicao.set(`${norm(p.ordem_produto)}|${pos}`, chave);
   }
 
   for (const c of carregados) {
