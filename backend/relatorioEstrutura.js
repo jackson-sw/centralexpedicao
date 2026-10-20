@@ -45,6 +45,7 @@ function calcularFaltantes(itensErp, carregados, posicoes) {
     const reg = porCodigo.get(chave) || {
       codigo: String(it.codigo).trim(),
       descricao: String(it.descricao == null ? '' : it.descricao).trim(),
+      und: String(it.und == null ? '' : it.und).trim(),
       necessario: 0,
       carregado: 0,
     };
@@ -77,6 +78,7 @@ function calcularFaltantes(itensErp, carregados, posicoes) {
     .map((r) => ({
       codigo: r.codigo,
       descricao: r.descricao,
+      und: r.und,
       necessario: arredonda(r.necessario),
       carregado: arredonda(r.carregado),
       faltante: arredonda(Math.max(r.necessario - r.carregado, 0)),

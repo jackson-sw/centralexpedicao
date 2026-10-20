@@ -35,6 +35,7 @@ const SELECT_ITENS_ESTRUTURA = `
   SELECT
     RTRIM(ee.ENG_EstruturaItemProduto)    AS codigo,
     RTRIM(pp.PRO_Descricao)               AS descricao,
+    MAX(RTRIM(ee.ENG_EstruturaItemDimUnd)) AS und,
     SUM(ee.ENG_EstruturaItemQuantidade)   AS quantidade
   FROM ENG_ESTRUTURAITEM AS ee
   JOIN PRO_PRODUTO AS pp

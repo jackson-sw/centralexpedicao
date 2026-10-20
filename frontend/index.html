@@ -1163,12 +1163,14 @@ function renderRelatorioFaltantes(prefixo) {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="text-align:left;color:var(--muted);font-size:11.5px;text-transform:uppercase">
           <th style="padding:8px 6px">Código</th><th style="padding:8px 6px">Descrição</th>
+          <th style="padding:8px 6px">Und</th>
           <th style="padding:8px 6px;text-align:right">Estrutura</th><th style="padding:8px 6px;text-align:right">Carregado</th><th style="padding:8px 6px;text-align:right">Faltante</th>
         </tr></thead>
         <tbody>${linhas.map(i => `
           <tr style="border-top:1px solid var(--border)">
             <td style="padding:8px 6px;font-family:monospace;font-weight:700">${escapeHtml(i.codigo)}</td>
             <td style="padding:8px 6px">${escapeHtml(i.descricao)}</td>
+            <td style="padding:8px 6px">${escapeHtml(i.und || '')}</td>
             <td style="padding:8px 6px;text-align:right">${fmtQtd(i.necessario)}</td>
             <td style="padding:8px 6px;text-align:right">${fmtQtd(i.carregado)}</td>
             <td style="padding:8px 6px;text-align:right;font-weight:800;color:${i.faltante > 0 ? 'var(--red-dark)' : '#166534'}">${fmtQtd(i.faltante)}</td>
