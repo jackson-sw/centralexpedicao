@@ -55,10 +55,17 @@ function gerarRomaneioPDF({ caixa, itens, responsaveis, titulo, rotuloResponsave
     // Número do projeto em destaque (negrito, vermelho, fonte maior) —
     // é o que a equipe procura primeiro ao conferir o romaneio.
     doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(12)
-      .text('Número do projeto:', marginX, y + 3);
-    doc.fillColor(RED).font('Helvetica-Bold').fontSize(18)
+      .text('Número do projeto:', marginX, y + 1);
+    doc.fillColor(RED).font('Helvetica-Bold').fontSize(14)
       .text(caixa.numero_projeto ? String(caixa.numero_projeto) : '—', 230, y);
-    y += 30;
+    y += 22;
+
+    // Equipamento (caixas antigas, anteriores ao campo, aparecem com "—").
+    doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(12)
+      .text('Equipamento:', marginX, y + 1);
+    doc.fillColor(RED).font('Helvetica-Bold').fontSize(14)
+      .text(caixa.equipamento ? String(caixa.equipamento) : '—', 230, y);
+    y += 28;
 
     doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(10)
       .text('Data/hora de fechamento:', marginX, y);
