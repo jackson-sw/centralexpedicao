@@ -126,7 +126,7 @@ router.get('/:id', auth, async (req, res) => {
 // perfil).
 router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
   try {
-    const { responsavel_nome, numero_projeto, observacoes, itens } = req.body;
+    const { responsavel_nome, numero_projeto, equipamento, observacoes, itens } = req.body;
 
     if (!responsavelValido(responsavel_nome, req.usuario.perfil)) {
       return res.status(400).json({ erro: 'Selecione um responsável válido.' });
@@ -135,6 +135,16 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
     const numeroProjeto = String(numero_projeto || '').trim();
     if (!numeroProjeto) {
       return res.status(400).json({ erro: 'Informe o número do projeto da caixa.' });
+    }
+    // Equipamento: obrigatório na criação da caixa, texto de até 8 caracteres
+    // (caixas.equipamento VARCHAR(8) — nula só nas caixas antigas, anteriores
+    // ao campo; rode alter_caixas_equipamento.sql antes de publicar).
+    const equipamentoLimpo = String(equipamento || '').trim();
+    if (!equipamentoLimpo) {
+      return res.status(400).json({ erro: 'Informe o equipamento da caixa.' });
+    }
+    if (equipamentoLimpo.length > 8) {
+      return res.status(400).json({ erro: 'O equipamento aceita no máximo 8 caracteres.' });
     }
     if (!Array.isArray(itens) || itens.length === 0) {
       return res.status(400).json({ erro: 'Inclua ao menos um item na caixa.' });
@@ -152,9 +162,9 @@ router.post('/', auth, apenasMontagemCaixa, async (req, res) => {
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO caixas (responsavel_nome, numero_projeto, observacoes, criado_por_perfil)
-         VALUES (?, ?, ?, ?)`,
-        [responsavel_nome, numeroProjeto, observacoes || null, req.usuario.perfil]
+        `INSERT INTO caixas (responsavel_nome, numero_projeto, equipamento, observacoes, criado_por_perfil)
+         VALUES (?, ?, ?, ?, ?)`,
+        [responsavel_nome, numeroProjeto, equipamentoLimpo, observacoes || null, req.usuario.perfil]
       );
       caixaId = result.insertId;
 
