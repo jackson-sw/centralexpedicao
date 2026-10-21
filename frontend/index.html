@@ -1622,6 +1622,7 @@ function renderCaixas(lista, targetId = 'lista-caixas') {
       <div class="cc-top">
         <div>
           <div class="cc-proj">${escapeHtml(codigoDoItemCaixa(c) || (rotulo + ' #' + c.id))}</div>
+          ${(c.numero_projeto || c.equipamento) ? `<div class="cc-proj">${escapeHtml([c.numero_projeto, c.equipamento].filter(Boolean).join(' - '))}</div>` : ''}
           <div class="cc-sub">${escapeHtml(c.responsavel_nome)}</div>
         </div>
         <span class="cc-badge ${c.status}">${labelStatusCaixa(c.status)}</span>
