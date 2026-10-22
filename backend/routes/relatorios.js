@@ -130,7 +130,13 @@ const SELECT_CARREGADOS = `
 //    Produção e Expedição ficam de fora);
 //  - "fechada" ou "expedida" (uma caixa expedida continua sendo uma caixa
 //    fechada que o Almoxarifado montou); caixas abertas ainda não contam;
-//  - o que vale são os itens dentro delas (caixa_itens).
+//  - o que vale são os itens dentro delas (caixa_itens);
+//  - só as caixas da ESTRUTURA pesquisada: o campo Equipamento da caixa
+//    (caixas.equipamento) tem que COMEÇAR com as 3 letras da estrutura
+//    (ex.: "TAV" ou "TAV010" para a estrutura TAV; sem diferenciar
+//    maiúsculas). Sem isso, as mesmas peças em caixas seriam contadas
+//    para todas as estruturas do projeto. Caixas antigas, sem
+//    equipamento, não entram.
 const SELECT_CAIXAS_ALMOXARIFADO = `
   SELECT cxi.codigo_item, cxi.quantidade
   FROM caixa_itens cxi
@@ -138,6 +144,7 @@ const SELECT_CAIXAS_ALMOXARIFADO = `
   WHERE cx.numero_projeto = ?
     AND cx.criado_por_perfil = 'almoxarifado'
     AND cx.status IN ('fechada', 'expedida')
+    AND UPPER(cx.equipamento) LIKE CONCAT(?, '%')
 `;
 
 // Núcleo dos relatórios "itens faltantes": itens da estrutura (ERP) x o que
@@ -171,7 +178,7 @@ function responderFaltantes(fonte) {
         .input('chave', sql.NVarChar, chave)
         .query(SELECT_POSICOES);
 
-      const [carregados] = await db.query(fonte.consulta, fonte.params(projeto));
+      const [carregados] = await db.query(fonte.consulta, fonte.params(projeto, estrutura));
       const { itens, resumo } = calcularFaltantes(itensErp, carregados, posicoes);
 
       if (querPdf(req)) {
@@ -215,7 +222,7 @@ router.get('/itens-faltantes-almoxarifado', auth, apenasPerfisDeFaltantes, respo
   rotuloCarregado: 'EM CAIXAS',
   arquivo: 'itens-faltantes-almoxarifado',
   consulta: SELECT_CAIXAS_ALMOXARIFADO,
-  params: (projeto) => [projeto],
+  params: (projeto, estrutura) => [projeto, estrutura],
 }));
 
 // ── Relatório de estrutura (projeto inteiro) ─────────────────
