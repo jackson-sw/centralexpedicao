@@ -29,7 +29,7 @@ Perfis fixos, sem tabela de usuários — senha validada por hash bcrypt guardad
 
 - **Consulta** (sem senha padrão — defina `CONSULTA_PASSWORD_HASH`) — perfil **somente leitura** para um agente de IA via API. **Não aparece na tela de login** do app. Obtém o token com `POST /api/auth/login` (`{"perfil":"consulta","senha":"..."}`) e envia `Authorization: Bearer <token>`. Só pode usar rotas `GET` (qualquer outro método responde 403, travado em `auth` em `backend/middleware/auth.js`); além disso, `POST /api/carregamentos/:id/romaneio`, `POST /api/caixas/:id/romaneio` e `POST /api/etiquetas` têm bloqueio explícito (`bloqueiaConsulta`), pois enviam e-mail / imprimem etiqueta. Com a variável em branco o perfil fica desativado (login responde 503).
 
-Os perfis **Expedição**, **Almoxarifado** e **Expedição Administrativo** têm uma guia **Relatórios** (depois de "Caixas"; Produção não vê). O "Relatório de estrutura de itens faltantes para envio" **só aparece para Almoxarifado e Expedição Administrativo** (Expedição vê apenas o "Relatório de estrutura"); ao marcá-lo aparecem os campos *Número do projeto* (6 dígitos, ou 8 se for reforma) e *Código da estrutura* (só as **3 letras**, ex.: `EPE` — pega todas as estruturas do projeto que começam com elas, como `EPE010` e `EPE020`) e o botão **Pesquisar** — ver [Relatório de estrutura de itens faltantes](#relatório-de-estrutura-de-itens-faltantes).
+Os perfis **Expedição**, **Almoxarifado** e **Expedição Administrativo** têm uma guia **Relatórios** (depois de "Caixas"; Produção não vê). O "Relatório de itens faltantes [Almoxarifado]" **só aparece para Almoxarifado e Expedição Administrativo** (Expedição vê apenas o "Relatório de estrutura"); ao marcá-lo aparecem os campos *Número do projeto* (6 dígitos, ou 8 se for reforma) e *Código da estrutura* (só as **3 letras**, ex.: `EPE` — pega todas as estruturas do projeto que começam com elas, como `EPE010` e `EPE020`) e o botão **Pesquisar** — ver [Relatório de itens faltantes [Almoxarifado]](#relatório-de-itens-faltantes-almoxarifado).
 
 Para trocar as senhas, gere um novo hash e atualize `EXPEDICAO_PASSWORD_HASH` / `EM_CAMPO_PASSWORD_HASH` / `ALMOXARIFADO_PASSWORD_HASH` / `PRODUCAO_PASSWORD_HASH` / `EXPEDICAO_ADMINISTRATIVO_PASSWORD_HASH` / `PINTURA_PASSWORD_HASH` / `CONSULTA_PASSWORD_HASH` em `backend/.env`:
 
@@ -198,16 +198,18 @@ WHERE TRY_CAST(oo.ORD_OrdemProjeto AS BIGINT) = TRY_CAST(@projeto AS BIGINT)
 
 Se não achar nenhuma linha (ou se o ERP estiver inacessível no momento), o item é recusado — por segurança, trata como "não pertence" em vez de deixar passar sem confirmação. Um código sem hífen (fora de qualquer padrão de estrutura) continua passando direto, sem checagem, como sempre foi.
 
-### Relatório de estrutura de itens faltantes
+### Relatório de itens faltantes [Almoxarifado]
 
-Guia **Relatórios** (este relatório: perfis Almoxarifado e Expedição Administrativo): informa-se o número do projeto + as 3 letras da estrutura e clica em **Pesquisar** (`GET /api/relatorios/estrutura-faltantes?projeto=250614&estrutura=EPE`, `backend/routes/relatorios.js`). O backend:
+Guia **Relatórios** (este relatório: perfis Almoxarifado e Expedição Administrativo): informa-se o número do projeto + as 3 letras da estrutura e clica em **Pesquisar** (`GET /api/relatorios/itens-faltantes-almoxarifado?projeto=250614&estrutura=EPE`, `backend/routes/relatorios.js`). O backend:
 
 1. Busca no ERP os itens das estruturas **na engenharia** (`comandos sql/Eng_itens_faltantes.txt`): `ENG_ESTRUTURAITEM` + `PRO_PRODUTO`, com `ENG_EstruturaProduto LIKE 'projeto-ESTRUTURA%'` (ex.: `250614-EPE%`). Só vale a **maior revisão** (`ENG_EstruturaNumero`) de cada estrutura; ficam de fora as letras `C`, `M`, `S` e `T` (`ENG_EstruturaItemLetra`) e os itens que têm estrutura própria (subconjuntos, presentes em `ENG_ESTRUTURA`). Comparam-se o código do item (`ENG_EstruturaItemProduto`) e a quantidade (`ENG_EstruturaItemQuantidade`), **somada por item** — inclusive entre as várias estruturas que casam com as 3 letras. Também traz a descrição (`PRO_Descricao`) e a unidade (`ENG_EstruturaItemDimUnd`, coluna **Und**).
-2. Soma o que já foi carregado em **todos** os carregamentos daquele projeto (um projeto pode ter vários; os cancelados não contam). Quando o carregamento tem uma caixa inteira, entram os itens que estão dentro dela.
-3. Associa cada item carregado ao item da estrutura pelo código (`ACABRU-0001`) ou, nas etiquetas com posição (`250614-TCA100-0078`), pelo `ORD_OrdemProduto` + posição da ordem de produção (`ORD_ORDEMPRVITEM`, consulta auxiliar só para mapear posição → item; comparada como número, `78` = `0078`). Itens carregados que não são dessa estrutura são ignorados.
-4. Devolve, por item: quantidade na estrutura, carregada e faltante (`max(estrutura − carregado, 0)`). A tela lista só os itens com falta, com a opção de mostrar também os completos.
+2. Soma o que o **Almoxarifado já montou** no projeto: os itens das caixas **fechadas ou expedidas** criadas pelo perfil Almoxarifado (`caixas.criado_por_perfil = 'almoxarifado'` e `numero_projeto` igual ao informado). Caixas ainda abertas e as montadas por Produção ou Expedição não entram. Na tela a coluna se chama **Em caixas**.
+3. Associa cada item das caixas ao item da estrutura pelo código (`ACABRU-0001`) ou, nas etiquetas com posição (`250614-TCA100-0078`), pelo `ORD_OrdemProduto` + posição da ordem de produção (`ORD_ORDEMPRVITEM`, consulta auxiliar só para mapear posição → item; comparada como número, `78` = `0078`). Itens carregados que não são dessa estrutura são ignorados.
+4. Devolve, por item: quantidade na estrutura, em caixas e faltante (`max(estrutura − carregado, 0)`). A tela lista só os itens com falta, com a opção de mostrar também os completos.
 
 O cálculo fica em `backend/relatorioEstrutura.js` (função pura, sem acesso a banco).
+
+> A rota antiga `GET /api/relatorios/estrutura-faltantes` (itens faltantes para **envio**, comparando com os carregamentos) continua existindo, usada pelo conector MCP, mas não aparece mais na guia Relatórios.
 
 ### Relatório de estrutura (projeto inteiro)
 

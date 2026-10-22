@@ -1117,7 +1117,7 @@ function montarRelatorios(containerId, prefixo) {
       ${podeVerRelatorioFaltantes() ? `
       <label class="rel-opcao" id="${prefixo}-opcao-estrutura-faltantes">
         <input type="radio" name="${prefixo}-tipo" value="estrutura-faltantes" onchange="selecionarRelatorio('${prefixo}')">
-        Relatório de estrutura de itens faltantes para envio
+        Relatório de itens faltantes [Almoxarifado]
       </label>` : ''}
       <label class="rel-opcao" id="${prefixo}-opcao-estrutura-projeto">
         <input type="radio" name="${prefixo}-tipo" value="estrutura-projeto" onchange="selecionarRelatorio('${prefixo}')">
@@ -1177,7 +1177,7 @@ async function pesquisarRelatorio(prefixo) {
       relatorioResultados[prefixo] = r;
       renderRelatorioEstruturaProjeto(prefixo);
     } else {
-      const r = await api('GET', `/relatorios/estrutura-faltantes?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}`);
+      const r = await api('GET', `/relatorios/itens-faltantes-almoxarifado?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}`);
       relatorioResultados[prefixo] = r;
       renderRelatorioFaltantes(prefixo);
     }
@@ -1211,8 +1211,8 @@ async function gerarPdfRelatorio(prefixo) {
   const todos = !!(document.getElementById(`${prefixo}-todos`) || {}).checked;
   const path = tipo === 'estrutura-projeto'
     ? `/relatorios/estrutura-projeto?projeto=${encodeURIComponent(projeto)}&formato=pdf&todos=${todos ? 1 : 0}`
-    : `/relatorios/estrutura-faltantes?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}&formato=pdf&todos=${todos ? 1 : 0}`;
-  const nome = tipo === 'estrutura-projeto' ? `relatorio-estrutura-${projeto}.pdf` : `estrutura-faltantes-${projeto}-${estrutura}.pdf`;
+    : `/relatorios/itens-faltantes-almoxarifado?projeto=${encodeURIComponent(projeto)}&estrutura=${encodeURIComponent(estrutura)}&formato=pdf&todos=${todos ? 1 : 0}`;
+  const nome = tipo === 'estrutura-projeto' ? `relatorio-estrutura-${projeto}.pdf` : `itens-faltantes-almoxarifado-${projeto}-${estrutura}.pdf`;
 
   btn.disabled = true; btn.textContent = 'Gerando...';
   try {
@@ -1260,7 +1260,7 @@ function renderRelatorioFaltantes(prefixo) {
         <thead><tr style="text-align:left;color:var(--muted);font-size:11.5px;text-transform:uppercase">
           <th style="padding:8px 6px;text-align:right">Item</th><th style="padding:8px 6px">Código</th><th style="padding:8px 6px">Descrição</th>
           <th style="padding:8px 6px">Und</th>
-          <th style="padding:8px 6px;text-align:right">Estrutura</th><th style="padding:8px 6px;text-align:right">Carregado</th><th style="padding:8px 6px;text-align:right">Faltante</th>
+          <th style="padding:8px 6px;text-align:right">Estrutura</th><th style="padding:8px 6px;text-align:right">Em caixas</th><th style="padding:8px 6px;text-align:right">Faltante</th>
         </tr></thead>
         <tbody>${linhas.map((i, n) => `
           <tr style="border-top:1px solid var(--border)">
@@ -1274,7 +1274,7 @@ function renderRelatorioFaltantes(prefixo) {
           </tr>`).join('')}
         </tbody>
       </table>
-    </div>` : `<div class="empty-box" style="padding:28px 16px"><div class="empty-icon">✅</div><div class="empty-title">Nenhum item faltando</div><div class="empty-sub">Tudo o que a estrutura pede já foi carregado.</div></div>`}`;
+    </div>` : `<div class="empty-box" style="padding:28px 16px"><div class="empty-icon">✅</div><div class="empty-title">Nenhum item faltando</div><div class="empty-sub">Tudo o que a estrutura pede já está em caixas fechadas do Almoxarifado.</div></div>`}`;
 }
 
 // Relatório de estrutura (projeto inteiro): um bloco por estrutura do

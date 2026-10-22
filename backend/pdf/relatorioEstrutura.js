@@ -33,7 +33,7 @@ function fmtQtd(n) {
 //   mostrarTodos: se false, só os itens com falta já vêm em `itens`
 //             (quem chama filtra) — aqui só muda a mensagem de grupo vazio.
 // }
-function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos, mostrarTodos }) {
+function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos, mostrarTodos, rotuloCarregado = 'CARREGADO' }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
     const chunks = [];
@@ -83,7 +83,7 @@ function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos,
       doc.text('DESCRIÇÃO', colDescricao + 6, yy + 7);
       doc.text('UND', colUnd + 2, yy + 7);
       doc.text('ESTRUTURA', colEstrutura, yy + 7, { width: larguraNum, align: 'right' });
-      doc.text('CARREGADO', colCarregado, yy + 7, { width: larguraNum, align: 'right' });
+      doc.text(rotuloCarregado, colCarregado, yy + 7, { width: larguraNum, align: 'right' });
       doc.text('FALTANTE', colFaltante, yy + 7, { width: larguraNum, align: 'right' });
       return yy + headerH;
     }

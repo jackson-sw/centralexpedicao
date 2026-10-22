@@ -124,55 +124,99 @@ const SELECT_CARREGADOS = `
   )
 `;
 
+// Caixas montadas pelo ALMOXARIFADO e já fechadas no projeto — é o que o
+// relatório "de itens faltantes [Almoxarifado]" compara com a estrutura:
+//  - só caixas criadas pelo perfil Almoxarifado (criado_por_perfil; as de
+//    Produção e Expedição ficam de fora);
+//  - "fechada" ou "expedida" (uma caixa expedida continua sendo uma caixa
+//    fechada que o Almoxarifado montou); caixas abertas ainda não contam;
+//  - o que vale são os itens dentro delas (caixa_itens).
+const SELECT_CAIXAS_ALMOXARIFADO = `
+  SELECT cxi.codigo_item, cxi.quantidade
+  FROM caixa_itens cxi
+  JOIN caixas cx ON cx.id = cxi.caixa_id
+  WHERE cx.numero_projeto = ?
+    AND cx.criado_por_perfil = 'almoxarifado'
+    AND cx.status IN ('fechada', 'expedida')
+`;
+
+// Núcleo dos relatórios "itens faltantes": itens da estrutura (ERP) x o que
+// já está em outro lugar (carregamentos ou caixas do Almoxarifado).
+// `fonte` define de onde vem o "carregado":
+//   { rotulo, titulo, arquivo, consulta, params(projeto), nome }
+function responderFaltantes(fonte) {
+  return async (req, res) => {
+    const projeto = String(req.query.projeto || '').trim();
+    const estrutura = String(req.query.estrutura || '').trim().toUpperCase();
+
+    if (!PADRAO_PROJETO.test(projeto)) {
+      return res.status(400).json({ erro: 'Informe o número do projeto com 6 dígitos (ou 8, se for reforma).' });
+    }
+    if (!PADRAO_ESTRUTURA.test(estrutura)) {
+      return res.status(400).json({ erro: 'Informe a estrutura com 3 letras (ex.: EPE).' });
+    }
+
+    try {
+      const pool = await getPool();
+      const chave = `${projeto}-${estrutura}%`;
+      const { recordset: itensErp } = await pool.request()
+        .input('chave', sql.NVarChar, chave)
+        .query(SELECT_ITENS_ESTRUTURA);
+
+      if (!itensErp.length) {
+        return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}*.` });
+      }
+
+      const { recordset: posicoes } = await pool.request()
+        .input('chave', sql.NVarChar, chave)
+        .query(SELECT_POSICOES);
+
+      const [carregados] = await db.query(fonte.consulta, fonte.params(projeto));
+      const { itens, resumo } = calcularFaltantes(itensErp, carregados, posicoes);
+
+      if (querPdf(req)) {
+        const todos = querTodos(req);
+        const pdf = await gerarRelatorioEstruturaPDF({
+          titulo: fonte.titulo,
+          rotuloCarregado: fonte.rotuloCarregado,
+          projeto,
+          resumo: `${projeto}-${estrutura}: ${resumo.total} ${resumo.total === 1 ? 'item' : 'itens'} na estrutura · ${resumo.com_falta} com falta · ${resumo.completos} completos`,
+          semFalta: resumo.com_falta === 0,
+          mostrarTodos: todos,
+          grupos: [{ titulo: `${projeto}-${estrutura}`, itens: todos ? itens : itens.filter((i) => i.faltante > 0) }],
+        });
+        return enviarPdf(res, pdf, `${fonte.arquivo}-${projeto}-${estrutura}.pdf`);
+      }
+
+      res.json({ projeto, estrutura, resumo, itens });
+    } catch (err) {
+      console.error(`[GET /relatorios/${fonte.nome}]`, err.message);
+      res.status(500).json({ erro: 'Erro ao gerar o relatório.' });
+    }
+  };
+}
+
 // GET /api/relatorios/estrutura-faltantes?projeto=250614&estrutura=EPE
-router.get('/estrutura-faltantes', auth, apenasPerfisDeFaltantes, async (req, res) => {
-  const projeto = String(req.query.projeto || '').trim();
-  const estrutura = String(req.query.estrutura || '').trim().toUpperCase();
+// Itens faltantes para ENVIO: estrutura x carregamentos do projeto.
+router.get('/estrutura-faltantes', auth, apenasPerfisDeFaltantes, responderFaltantes({
+  nome: 'estrutura-faltantes',
+  titulo: 'ITENS FALTANTES PARA ENVIO',
+  rotuloCarregado: 'CARREGADO',
+  arquivo: 'estrutura-faltantes',
+  consulta: SELECT_CARREGADOS,
+  params: (projeto) => [projeto, projeto],
+}));
 
-  if (!PADRAO_PROJETO.test(projeto)) {
-    return res.status(400).json({ erro: 'Informe o número do projeto com 6 dígitos (ou 8, se for reforma).' });
-  }
-  if (!PADRAO_ESTRUTURA.test(estrutura)) {
-    return res.status(400).json({ erro: 'Informe a estrutura com 3 letras (ex.: EPE).' });
-  }
-
-  try {
-    const pool = await getPool();
-    const chave = `${projeto}-${estrutura}%`;
-    const { recordset: itensErp } = await pool.request()
-      .input('chave', sql.NVarChar, chave)
-      .query(SELECT_ITENS_ESTRUTURA);
-
-    if (!itensErp.length) {
-      return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}*.` });
-    }
-
-    const { recordset: posicoes } = await pool.request()
-      .input('chave', sql.NVarChar, chave)
-      .query(SELECT_POSICOES);
-
-    const [carregados] = await db.query(SELECT_CARREGADOS, [projeto, projeto]);
-    const { itens, resumo } = calcularFaltantes(itensErp, carregados, posicoes);
-
-    if (querPdf(req)) {
-      const todos = querTodos(req);
-      const pdf = await gerarRelatorioEstruturaPDF({
-        titulo: 'ITENS FALTANTES PARA ENVIO',
-        projeto,
-        resumo: `${projeto}-${estrutura}: ${resumo.total} ${resumo.total === 1 ? 'item' : 'itens'} na estrutura · ${resumo.com_falta} com falta · ${resumo.completos} completos`,
-        semFalta: resumo.com_falta === 0,
-        mostrarTodos: todos,
-        grupos: [{ titulo: `${projeto}-${estrutura}`, itens: todos ? itens : itens.filter((i) => i.faltante > 0) }],
-      });
-      return enviarPdf(res, pdf, `estrutura-faltantes-${projeto}-${estrutura}.pdf`);
-    }
-
-    res.json({ projeto, estrutura, resumo, itens });
-  } catch (err) {
-    console.error('[GET /relatorios/estrutura-faltantes]', err.message);
-    res.status(500).json({ erro: 'Erro ao gerar o relatório.' });
-  }
-});
+// GET /api/relatorios/itens-faltantes-almoxarifado?projeto=250614&estrutura=EPE
+// Itens faltantes [Almoxarifado]: estrutura x caixas fechadas do Almoxarifado.
+router.get('/itens-faltantes-almoxarifado', auth, apenasPerfisDeFaltantes, responderFaltantes({
+  nome: 'itens-faltantes-almoxarifado',
+  titulo: 'ITENS FALTANTES [ALMOXARIFADO]',
+  rotuloCarregado: 'EM CAIXAS',
+  arquivo: 'itens-faltantes-almoxarifado',
+  consulta: SELECT_CAIXAS_ALMOXARIFADO,
+  params: (projeto) => [projeto],
+}));
 
 // ── Relatório de estrutura (projeto inteiro) ─────────────────
 // Mesmo processo do relatório de itens faltantes, mas para TODAS as
