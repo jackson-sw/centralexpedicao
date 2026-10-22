@@ -1,0 +1,29 @@
+-- Relatório de estrutura de itens faltantes para envio
+-- Itens que as estruturas do projeto precisam (ERP). Usado em backend/routes/relatorios.js
+-- (SELECT_ITENS_ESTRUTURA — lá a quantidade já é somada por item).
+-- Colunas que importam na comparação: ENG_EstruturaItemProduto e ENG_EstruturaItemQuantidade.
+
+SELECT ei.ENG_EstruturaProduto
+      ,ei.ENG_EstruturaNumero
+      ,ei.ENG_EstruturaItemSeq
+      ,ei.ENG_EstruturaItemPosicao
+      ,ei.ENG_EstruturaItemProduto
+      ,p.PRO_Descricao
+      ,ei.ENG_EstruturaItemQuantidade
+      ,ei.ENG_EstruturaItemLetra
+  FROM ENG_ESTRUTURAITEM ei
+  JOIN PRO_PRODUTO p
+        ON p.PRO_Codigo = ei.ENG_EstruturaItemProduto
+  WHERE ei.ENG_EstruturaProduto LIKE '250614-EPE%'
+    AND ei.ENG_EstruturaItemLetra NOT IN ('C', 'M', 'S', 'T')
+    AND ei.ENG_EstruturaNumero = (
+          SELECT MAX(e2.ENG_EstruturaNumero)
+          FROM ENG_ESTRUTURAITEM e2
+          WHERE e2.ENG_EstruturaProduto = ei.ENG_EstruturaProduto
+        )
+    -- exclui itens que possuem estrutura própria (subconjuntos)
+    AND NOT EXISTS (
+          SELECT 1
+          FROM ENG_ESTRUTURA es
+          WHERE es.ENG_EstruturaProduto = ei.ENG_EstruturaItemProduto
+        )

@@ -27,38 +27,56 @@ function apenasPerfisDeRelatorio(req, res, next) {
   next();
 }
 
-// Projeto: 6 dígitos, ou 8 de reforma (6 do original + 2 da reforma).
-// Estrutura: 3 letras + número (ex.: TCA100).
-const PADRAO_PROJETO = /^\d{6}(?:\d{2})?$/;
-const PADRAO_ESTRUTURA = /^[A-Za-z]{3}\d+$/;
+// O relatório "de itens faltantes para envio" (por enquanto) só é liberado
+// para Almoxarifado e Expedição Administrativo (o perfil consulta, de
+// leitura, também — ver README).
+const PERFIS_FALTANTES = ['almoxarifado', 'expedicao_administrativo', 'consulta'];
 
-// Itens (e quantidades) que a estrutura precisa, vindos da ENGENHARIA
-// (ENG_ESTRUTURAITEM + PRO_PRODUTO), filtrando por ENG_EstruturaProduto
-// ("projeto-estrutura", ex.: 250614-TCA100) com LIKE. O valor já foi
-// validado pelos padrões acima (só dígitos/letras), então não há curinga
-// indevido.
-//
-// ENG_EstruturaNumero é a revisão da estrutura (1, 2, 3...): só vale a
-// MAIOR revisão de cada estrutura — as anteriores trazem quantidades
-// antigas/duplicadas do mesmo item. Dentro da revisão válida, o mesmo
-// item pode aparecer em mais de uma linha (posições diferentes), então
-// a quantidade é somada por item.
+function apenasPerfisDeFaltantes(req, res, next) {
+  if (!PERFIS_FALTANTES.includes(req.usuario?.perfil)) {
+    return res.status(403).json({ erro: 'Este relatório está disponível apenas para os perfis Almoxarifado e Expedição Administrativo.' });
+  }
+  next();
+}
+
+// Projeto: 6 dígitos, ou 8 de reforma (6 do original + 2 da reforma).
+// Estrutura (relatório de faltantes): só as 3 letras do tipo (ex.: EPE) —
+// pega todas as estruturas do projeto que começam com elas (EPE010, EPE020...).
+const PADRAO_PROJETO = /^\d{6}(?:\d{2})?$/;
+const PADRAO_ESTRUTURA = /^[A-Za-z]{3}$/;
+
+// Itens (e quantidades) que as estruturas precisam, vindos da ENGENHARIA
+// (ENG_ESTRUTURAITEM + PRO_PRODUTO) — comando em
+// "comandos sql/Eng_itens_faltantes.txt". @chave = "projeto-ESTRUTURA%"
+// (ex.: 250614-EPE%), já validado (só dígitos/letras).
+//  - só a MAIOR revisão (ENG_EstruturaNumero) de cada estrutura;
+//  - descarta as letras C, M, S e T (ENG_EstruturaItemLetra);
+//  - descarta itens que têm estrutura própria (subconjuntos): o que conta
+//    são os componentes deles, não o subconjunto em si;
+//  - a quantidade é SOMADA por item (ENG_EstruturaItemProduto), somando
+//    também entre as várias estruturas que casam com as 3 letras.
 const SELECT_ITENS_ESTRUTURA = `
   SELECT
-    RTRIM(ee.ENG_EstruturaItemProduto)    AS codigo,
-    RTRIM(pp.PRO_Descricao)               AS descricao,
-    MAX(RTRIM(ee.ENG_EstruturaItemDimUnd)) AS und,
-    SUM(ee.ENG_EstruturaItemQuantidade)   AS quantidade
-  FROM ENG_ESTRUTURAITEM AS ee
-  JOIN PRO_PRODUTO AS pp
-    ON pp.PRO_Codigo = ee.ENG_EstruturaItemProduto
-  WHERE ee.ENG_EstruturaProduto LIKE @chave
-    AND ee.ENG_EstruturaNumero = (
+    RTRIM(ei.ENG_EstruturaItemProduto)      AS codigo,
+    RTRIM(p.PRO_Descricao)                  AS descricao,
+    MAX(RTRIM(ei.ENG_EstruturaItemDimUnd))  AS und,
+    SUM(ei.ENG_EstruturaItemQuantidade)     AS quantidade
+  FROM ENG_ESTRUTURAITEM AS ei
+  JOIN PRO_PRODUTO AS p
+    ON p.PRO_Codigo = ei.ENG_EstruturaItemProduto
+  WHERE ei.ENG_EstruturaProduto LIKE @chave
+    AND ei.ENG_EstruturaItemLetra NOT IN ('C', 'M', 'S', 'T')
+    AND ei.ENG_EstruturaNumero = (
       SELECT MAX(e2.ENG_EstruturaNumero)
       FROM ENG_ESTRUTURAITEM AS e2
-      WHERE e2.ENG_EstruturaProduto = ee.ENG_EstruturaProduto
+      WHERE e2.ENG_EstruturaProduto = ei.ENG_EstruturaProduto
     )
-  GROUP BY RTRIM(ee.ENG_EstruturaItemProduto), RTRIM(pp.PRO_Descricao)
+    AND NOT EXISTS (
+      SELECT 1
+      FROM ENG_ESTRUTURA AS es
+      WHERE es.ENG_EstruturaProduto = ei.ENG_EstruturaItemProduto
+    )
+  GROUP BY RTRIM(ei.ENG_EstruturaItemProduto), RTRIM(p.PRO_Descricao)
 `;
 
 // Posição de cada item na ordem de produção (ORD_ORDEM + ORD_ORDEMPRVITEM).
@@ -106,8 +124,8 @@ const SELECT_CARREGADOS = `
   )
 `;
 
-// GET /api/relatorios/estrutura-faltantes?projeto=250614&estrutura=TCA100
-router.get('/estrutura-faltantes', auth, apenasPerfisDeRelatorio, async (req, res) => {
+// GET /api/relatorios/estrutura-faltantes?projeto=250614&estrutura=EPE
+router.get('/estrutura-faltantes', auth, apenasPerfisDeFaltantes, async (req, res) => {
   const projeto = String(req.query.projeto || '').trim();
   const estrutura = String(req.query.estrutura || '').trim().toUpperCase();
 
@@ -115,18 +133,18 @@ router.get('/estrutura-faltantes', auth, apenasPerfisDeRelatorio, async (req, re
     return res.status(400).json({ erro: 'Informe o número do projeto com 6 dígitos (ou 8, se for reforma).' });
   }
   if (!PADRAO_ESTRUTURA.test(estrutura)) {
-    return res.status(400).json({ erro: 'Informe o código da estrutura (3 letras + número, ex.: TCA100).' });
+    return res.status(400).json({ erro: 'Informe a estrutura com 3 letras (ex.: EPE).' });
   }
 
   try {
     const pool = await getPool();
-    const chave = `%${projeto}-${estrutura}%`;
+    const chave = `${projeto}-${estrutura}%`;
     const { recordset: itensErp } = await pool.request()
       .input('chave', sql.NVarChar, chave)
       .query(SELECT_ITENS_ESTRUTURA);
 
     if (!itensErp.length) {
-      return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}.` });
+      return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}*.` });
     }
 
     const { recordset: posicoes } = await pool.request()

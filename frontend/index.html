@@ -1084,14 +1084,21 @@ function trocarAbaAlmox(tab) {
 // Perfis Expedição, Almoxarifado e Expedição Administrativo. Escolher o
 // relatório mostra os campos de filtro e o botão Pesquisar.
 // `prefixo` evita ids duplicados entre as telas (Expedição x Almoxarifado).
+// O relatório de itens faltantes para envio, por enquanto, só aparece para
+// Almoxarifado e Expedição Administrativo (o backend também restringe).
+function podeVerRelatorioFaltantes() {
+  return PERFIL === 'almoxarifado' || PERFIL === 'expedicao_administrativo';
+}
+
 function montarRelatorios(containerId, prefixo) {
   document.getElementById(containerId).innerHTML = `
     <div class="rel-painel">
       <div class="fg" style="margin-bottom:0"><label>Relatório</label></div>
+      ${podeVerRelatorioFaltantes() ? `
       <label class="rel-opcao" id="${prefixo}-opcao-estrutura-faltantes">
         <input type="radio" name="${prefixo}-tipo" value="estrutura-faltantes" onchange="selecionarRelatorio('${prefixo}')">
         Relatório de estrutura de itens faltantes para envio
-      </label>
+      </label>` : ''}
       <label class="rel-opcao" id="${prefixo}-opcao-estrutura-projeto">
         <input type="radio" name="${prefixo}-tipo" value="estrutura-projeto" onchange="selecionarRelatorio('${prefixo}')">
         Relatório de estrutura
@@ -1104,7 +1111,7 @@ function montarRelatorios(containerId, prefixo) {
           </div>
           <div class="fg" id="${prefixo}-grupo-estrutura">
             <label>Código da estrutura</label>
-            <input id="${prefixo}-estrutura" placeholder="Ex: TCR500" maxlength="6" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')pesquisarRelatorio('${prefixo}')">
+            <input id="${prefixo}-estrutura" placeholder="Ex: EPE" maxlength="3" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')pesquisarRelatorio('${prefixo}')">
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1137,8 +1144,8 @@ async function pesquisarRelatorio(prefixo) {
     toast('Informe o número do projeto com 6 dígitos (ou 8, se for reforma).', true);
     return;
   }
-  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}\d+$/.test(estrutura)) {
-    toast('Informe o código da estrutura (3 letras + número, ex.: TCA100).', true);
+  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}$/.test(estrutura)) {
+    toast('Informe a estrutura com 3 letras (ex.: EPE).', true);
     return;
   }
 
@@ -1176,8 +1183,8 @@ async function gerarPdfRelatorio(prefixo) {
     toast('Informe o número do projeto com 6 dígitos (ou 8, se for reforma).', true);
     return;
   }
-  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}\d+$/.test(estrutura)) {
-    toast('Informe o código da estrutura (3 letras + número, ex.: TCA100).', true);
+  if (tipo === 'estrutura-faltantes' && !/^[A-Z]{3}$/.test(estrutura)) {
+    toast('Informe a estrutura com 3 letras (ex.: EPE).', true);
     return;
   }
 
@@ -1299,7 +1306,8 @@ function renderRelatorioEstruturaProjeto(prefixo) {
 function selecionarRelatorio(prefixo) {
   const tipo = tipoRelatorio(prefixo);
   for (const t of ['estrutura-faltantes', 'estrutura-projeto']) {
-    document.getElementById(`${prefixo}-opcao-${t}`).classList.toggle('on', tipo === t);
+    const opcao = document.getElementById(`${prefixo}-opcao-${t}`);
+    if (opcao) opcao.classList.toggle('on', tipo === t);
   }
   document.getElementById(`${prefixo}-campos`).style.display = tipo ? 'block' : 'none';
   document.getElementById(`${prefixo}-grupo-estrutura`).style.display = tipo === 'estrutura-faltantes' ? '' : 'none';
