@@ -4,7 +4,7 @@
 // O mesmo conjunto de nomes é replicado no frontend
 // (RESPONSAVEIS_POR_PERFIL em frontend/index.html) — se uma lista
 // mudar aqui, atualize lá também.
-const ALMOXARIFADO_RESPONSAVEIS = ['Kerllon Pereira', 'Léo Neves', 'Filipe Luchtenberg', 'Diter Doering'];
+const ALMOXARIFADO_RESPONSAVEIS = ['Kerllon Pereira', 'Léo Neves', 'Filipe Luchtenberg', 'Diter Doering', 'Maik May'];
 // Produção usa as MESMAS tabelas de Almoxarifado/Expedição (caixas/
 // caixa_itens — ver backend/routes/caixas.js), só com uma equipe
 // própria diferente.
