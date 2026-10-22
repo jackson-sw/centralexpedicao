@@ -383,6 +383,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <div class="hist-tab" id="tab-relatorios" onclick="trocarAbaHistorico('relatorios')">Relatórios</div>
       </div>
 
+      <input type="text" class="busca-inp" id="busca-carregamentos" placeholder="🔍 Buscar por número de projeto..." oninput="renderLista(carregamentosCache)">
+      <input type="text" class="busca-inp" id="busca-caixas" style="display:none" placeholder="🔍 Buscar por número de projeto..." oninput="renderCaixas(caixasCache, 'lista-caixas')">
       <div id="lista-carregamentos"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
       <div id="lista-caixas" style="display:none"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
       <!-- Preenchido por montarRelatorios() no boot() (perfis Expedição e Expedição Administrativo). -->
@@ -421,6 +423,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         <div class="hist-tab" id="almox-tab-relatorios" onclick="trocarAbaAlmox('relatorios')">Relatórios</div>
       </div>
 
+      <input type="text" class="busca-inp" id="busca-caixas-almox" placeholder="🔍 Buscar por número de projeto..." oninput="renderCaixas(caixasCache, 'lista-caixas-almox')">
       <div id="lista-caixas-almox"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
       <div id="lista-relatorios-almox" style="display:none"></div>
     </div>
@@ -987,10 +990,22 @@ function renderStats(lista) {
   document.getElementById('stat-total').textContent = lista.length;
 }
 
-function renderLista(lista) {
+// Filtra pela busca de projeto (contém, sem diferenciar maiúsculas) — o
+// termo vem do campo acima da lista, então a lista continua filtrada
+// quando é recarregada automaticamente a cada 25s.
+function filtrarPorProjeto(lista, inputId) {
+  const el = document.getElementById(inputId);
+  const termo = el ? el.value.toLowerCase().trim() : '';
+  return termo ? lista.filter(c => String(c.numero_projeto || '').toLowerCase().includes(termo)) : lista;
+}
+
+function renderLista(listaCompleta) {
   const el = document.getElementById('lista-carregamentos');
+  const lista = filtrarPorProjeto(listaCompleta, 'busca-carregamentos');
   if (!lista.length) {
-    el.innerHTML = `<div class="empty-box"><div class="empty-icon">📭</div><div class="empty-title">Nenhum carregamento registrado</div><div class="empty-sub">Toque em "Novo Carregamento" para começar.</div></div>`;
+    el.innerHTML = listaCompleta.length
+      ? `<div class="empty-box"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum projeto encontrado</div><div class="empty-sub">Nenhum carregamento com esse número de projeto.</div></div>`
+      : `<div class="empty-box"><div class="empty-icon">📭</div><div class="empty-title">Nenhum carregamento registrado</div><div class="empty-sub">Toque em "Novo Carregamento" para começar.</div></div>`;
     return;
   }
   el.innerHTML = lista.map(c => `
@@ -1067,6 +1082,8 @@ function trocarAbaHistorico(tab) {
   document.getElementById('tab-caixas').classList.toggle('on', tab === 'caixas');
   document.getElementById('tab-relatorios').classList.toggle('on', tab === 'relatorios');
   document.getElementById('lista-carregamentos').style.display = tab === 'carregamentos' ? 'block' : 'none';
+  document.getElementById('busca-carregamentos').style.display = tab === 'carregamentos' ? '' : 'none';
+  document.getElementById('busca-caixas').style.display = tab === 'caixas' ? '' : 'none';
   document.getElementById('lista-caixas').style.display = tab === 'caixas' ? 'block' : 'none';
   document.getElementById('lista-relatorios').style.display = tab === 'relatorios' ? 'block' : 'none';
 }
@@ -1077,6 +1094,7 @@ function trocarAbaAlmox(tab) {
   document.getElementById('almox-tab-caixas').classList.toggle('on', tab === 'caixas');
   document.getElementById('almox-tab-relatorios').classList.toggle('on', tab === 'relatorios');
   document.getElementById('lista-caixas-almox').style.display = tab === 'caixas' ? 'block' : 'none';
+  document.getElementById('busca-caixas-almox').style.display = tab === 'caixas' ? '' : 'none';
   document.getElementById('lista-relatorios-almox').style.display = tab === 'relatorios' ? 'block' : 'none';
 }
 
@@ -1618,9 +1636,14 @@ async function carregarCaixas(targetId = 'lista-caixas') {
   }
 }
 
-function renderCaixas(lista, targetId = 'lista-caixas') {
+function renderCaixas(listaCompleta, targetId = 'lista-caixas') {
   const el = document.getElementById(targetId);
   const rotulo = rotuloItemCaixaAtual();
+  const lista = filtrarPorProjeto(listaCompleta, targetId === 'lista-caixas-almox' ? 'busca-caixas-almox' : 'busca-caixas');
+  if (!lista.length && listaCompleta.length) {
+    el.innerHTML = `<div class="empty-box"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum projeto encontrado</div><div class="empty-sub">Nenhuma caixa com esse número de projeto.</div></div>`;
+    return;
+  }
   if (!lista.length) {
     el.innerHTML = rotulo === 'Romaneio'
       ? `<div class="empty-box"><div class="empty-icon">🧾</div><div class="empty-title">Nenhum romaneio registrado</div><div class="empty-sub">Toque em "Novo Romaneio" para montar o primeiro.</div></div>`
