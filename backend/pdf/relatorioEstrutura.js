@@ -46,13 +46,14 @@ function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos,
     const contentRight = pageWidth - marginX;
 
     // Colunas da tabela
-    const colCodigo = marginX;
-    const colDescricao = colCodigo + 88;
-    const colUnd = colDescricao + 207;
+    const colItem = marginX;
+    const colCodigo = marginX + 26;
+    const colDescricao = colCodigo + 84;
+    const colUnd = colDescricao + 183;
     const colEstrutura = colUnd + 32;
     const colCarregado = colEstrutura + 62;
     const colFaltante = colCarregado + 62;
-    const larguraCodigo = colDescricao - colCodigo - 8;
+    const larguraCodigo = colDescricao - colCodigo - 6;
     const larguraDescricao = colUnd - colDescricao - 8;
     const larguraNum = 56;
     const rowH = 20;
@@ -77,6 +78,7 @@ function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos,
     function cabecalhoTabela(yy) {
       doc.rect(marginX, yy, contentRight - marginX, headerH).fill('#f3f4f6');
       doc.fillColor(MUTED).font('Helvetica-Bold').fontSize(8.5);
+      doc.text('ITEM', colItem, yy + 7, { width: 22, align: 'right' });
       doc.text('CÓDIGO', colCodigo + 6, yy + 7);
       doc.text('DESCRIÇÃO', colDescricao + 6, yy + 7);
       doc.text('UND', colUnd + 2, yy + 7);
@@ -123,6 +125,7 @@ function gerarRelatorioEstruturaPDF({ titulo, projeto, resumo, semFalta, grupos,
         }
 
         if (idx % 2 === 1) doc.rect(marginX, y, contentRight - marginX, alturaLinha).fill(ZEBRA);
+        doc.fillColor(MUTED).font('Helvetica').fontSize(8.5).text(String(idx + 1), colItem, y + 6, { width: 22, align: 'right' });
         doc.fillColor(TEXT).font('Courier-Bold').fontSize(8.5).text(it.codigo || '', colCodigo + 6, y + 6, { width: larguraCodigo });
         doc.font('Helvetica').fontSize(9).text(it.descricao || '', colDescricao + 6, y + 6, { width: larguraDescricao });
         doc.text(it.und || '', colUnd + 2, y + 6, { width: 30 });
