@@ -85,6 +85,7 @@ const SELECT_ITENS_ESTRUTURA = `
 // (subconjuntos); o que o Almoxarifado precisa separar são os itens FILHO
 // de cada subconjunto, na maior revisão de cada estrutura:
 //   quantidade = quantidade do filho x quantidade do pai.
+// Ficam de fora os filhos com letra C, M, S ou T (ENG_EstruturaItemLetra).
 // @chave = "projeto-ESTRUTURA%" aplicado ao produto do PAI. A quantidade é
 // SOMADA por código de item do filho (o mesmo código pode vir de vários pais).
 const SELECT_ITENS_ESTRUTURA_ALMOXARIFADO = `
@@ -109,6 +110,7 @@ const SELECT_ITENS_ESTRUTURA_ALMOXARIFADO = `
         FROM ENG_ESTRUTURA AS e2
         WHERE e2.ENG_EstruturaProduto = PAI.ENG_EstruturaProduto
    )
+    AND FILHO.ENG_EstruturaItemLetra NOT IN ('C', 'M', 'S', 'T')
   GROUP BY RTRIM(FILHO.ENG_EstruturaItemProduto), RTRIM(PF.PRO_Descricao)
 `;
 
