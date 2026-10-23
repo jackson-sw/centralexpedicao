@@ -79,6 +79,39 @@ const SELECT_ITENS_ESTRUTURA = `
   GROUP BY RTRIM(ei.ENG_EstruturaItemProduto), RTRIM(p.PRO_Descricao)
 `;
 
+// Itens que as estruturas precisam para o relatório "de itens faltantes
+// [Almoxarifado]" — comando em "comandos sql/Eng_itens_faltantes_almoxarifado.txt".
+// A estrutura do projeto (ex.: 250614-TAV%) é formada por itens PAI
+// (subconjuntos); o que o Almoxarifado precisa separar são os itens FILHO
+// de cada subconjunto, na maior revisão de cada estrutura:
+//   quantidade = quantidade do filho x quantidade do pai.
+// @chave = "projeto-ESTRUTURA%" aplicado ao produto do PAI. A quantidade é
+// SOMADA por código de item do filho (o mesmo código pode vir de vários pais).
+const SELECT_ITENS_ESTRUTURA_ALMOXARIFADO = `
+  SELECT
+    RTRIM(FILHO.ENG_EstruturaItemProduto)       AS codigo,
+    RTRIM(PF.PRO_Descricao)                     AS descricao,
+    MAX(RTRIM(FILHO.ENG_EstruturaItemDimUnd))   AS und,
+    SUM(FILHO.ENG_EstruturaItemQuantidade * PAI.ENG_EstruturaItemQuantidade) AS quantidade
+  FROM ENG_ESTRUTURAITEM AS PAI
+  INNER JOIN ENG_ESTRUTURAITEM AS FILHO
+    ON FILHO.ENG_EstruturaProduto = PAI.ENG_EstruturaItemProduto
+   AND FILHO.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM ENG_ESTRUTURA AS e2
+        WHERE e2.ENG_EstruturaProduto = FILHO.ENG_EstruturaProduto
+   )
+  INNER JOIN PRO_PRODUTO AS PF
+    ON PF.PRO_Codigo = FILHO.ENG_EstruturaItemProduto
+  WHERE PAI.ENG_EstruturaItemProduto LIKE @chave
+    AND PAI.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM ENG_ESTRUTURA AS e2
+        WHERE e2.ENG_EstruturaProduto = PAI.ENG_EstruturaProduto
+   )
+  GROUP BY RTRIM(FILHO.ENG_EstruturaItemProduto), RTRIM(PF.PRO_Descricao)
+`;
+
 // Posição de cada item na ordem de produção (ORD_ORDEM + ORD_ORDEMPRVITEM).
 // Serve só para associar etiquetas no formato "projeto-estrutura-posição"
 // (ex.: 250614-TCA100-0078, que não traz o código do item) ao item
@@ -168,7 +201,7 @@ function responderFaltantes(fonte) {
       const chave = `${projeto}-${estrutura}%`;
       const { recordset: itensErp } = await pool.request()
         .input('chave', sql.NVarChar, chave)
-        .query(SELECT_ITENS_ESTRUTURA);
+        .query(fonte.selectItens || SELECT_ITENS_ESTRUTURA);
 
       if (!itensErp.length) {
         return res.status(404).json({ erro: `Nenhum item encontrado no ERP para ${projeto}-${estrutura}*.` });
@@ -221,6 +254,7 @@ router.get('/itens-faltantes-almoxarifado', auth, apenasPerfisDeFaltantes, respo
   titulo: 'ITENS FALTANTES [ALMOXARIFADO]',
   rotuloCarregado: 'EM CAIXAS',
   arquivo: 'itens-faltantes-almoxarifado',
+  selectItens: SELECT_ITENS_ESTRUTURA_ALMOXARIFADO,
   consulta: SELECT_CAIXAS_ALMOXARIFADO,
   params: (projeto, estrutura) => [projeto, estrutura],
 }));
