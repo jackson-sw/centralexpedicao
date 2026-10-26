@@ -142,7 +142,7 @@ O catálogo de itens/materiais não é mais mantido dentro desta aplicação. To
 | Formato do código lido | Exemplo | Consulta |
 |---|---|---|
 | código de catálogo "normal" | `12345` | direto em `PRO_PRODUTO` pelo `PRO_Codigo` |
-| item de estrutura de engenharia **com posição** | `265545-DTV001-0463` | junção `ORD_ORDEM` + `ORD_ORDEMPRVITEM` + `PRO_PRODUTO` (ver abaixo) |
+| item de estrutura de engenharia **com posição** | `265545-DTV001-0463` | `ENG_ESTRUTURAITEM` (pai/filho) + `PRO_PRODUTO` (ver abaixo) — ou `PRO_PRODUTO` direto se a posição for o número da estrutura |
 
 **Consulta direta (código de catálogo normal):**
 
@@ -152,21 +152,28 @@ O catálogo de itens/materiais não é mais mantido dentro desta aplicação. To
 | descrição | `PRO_Descricao` |
 | quantidade | `PRO_PesoLiquido` |
 
-**Consulta por posição** — a partir da versão em que as etiquetas de item de estrutura passaram a trazer um terceiro número no final (a posição do item dentro da ordem de produção, ex.: `265545-DTV001-0463`), o `PRO_Codigo` sozinho não identifica mais a linha certa: é preciso juntar a ordem de produção (`ORD_ORDEM`) com o item dela (`ORD_ORDEMPRVITEM`) pela posição lida. O código é dividido em duas partes pelo padrão `PADRAO_CODIGO_COM_POSICAO` (`backend/routes/itensMateriais.js`): tudo antes do último hífen vira o "produto" da ordem (`265545-DTV001`), e o que vem depois é a posição (`0463`):
+**Consulta por posição** — as etiquetas de item de estrutura trazem um terceiro número no final (a posição do item, ex.: `265545-DTV001-463`), e o `PRO_Codigo` sozinho não identifica o item. Há **dois casos** (`backend/routes/itensMateriais.js`; comando em `comandos sql/Eng_busca_item_posicao.txt`):
+
+1. **A posição é o próprio número da estrutura** (ex.: `250614-EPE010-10`: estrutura `EPE010`, `010` = `10`) — a etiqueta é do item `250614-EPE010` em si: descarta a posição e busca como código sem posição (`PRO_PRODUTO`, tabela acima).
+2. **A posição não é o número da estrutura** (ex.: `265545-DTV001-463`) — busca na **engenharia**: o `Produto_Pai` (`265545-DTV001`) é um item da estrutura (pai); o item procurado é o **filho** desse pai com `Posicao_Filho` = 463, ambos na maior revisão (`ENG_EstruturaNumero`), e a descrição é a do filho (`Descricao_Filho`):
 
 ```sql
 SELECT TOP 1
-  RTRIM(oo.ORD_OrdemNumero)     AS codigo,
-  RTRIM(pp.PRO_Descricao)       AS descricao,
-  oi.ORD_OrdemPrvItemQuantidade AS quantidade
-FROM ORD_ORDEM AS oo
-JOIN ORD_ORDEMPRVITEM AS oi
-  ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
-JOIN PRO_PRODUTO AS pp
-  ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
-WHERE RTRIM(oo.ORD_OrdemProduto) = @produto
-  AND TRY_CAST(RTRIM(oi.ORD_OrdemPrvItemPosicao) AS INT) = TRY_CAST(@posicao AS INT)
+  RTRIM(FILHO.ENG_EstruturaItemProduto) AS codigo,
+  RTRIM(PF.PRO_Descricao)               AS descricao,
+  FILHO.ENG_EstruturaItemQuantidade * PAI.ENG_EstruturaItemQuantidade AS quantidade
+FROM ENG_ESTRUTURAITEM AS PAI
+INNER JOIN ENG_ESTRUTURAITEM AS FILHO
+  ON FILHO.ENG_EstruturaProduto = PAI.ENG_EstruturaItemProduto
+ AND FILHO.ENG_EstruturaNumero = (SELECT MAX(e2.ENG_EstruturaNumero) FROM ENG_ESTRUTURA AS e2
+                                  WHERE e2.ENG_EstruturaProduto = FILHO.ENG_EstruturaProduto)
+INNER JOIN PRO_PRODUTO AS PF ON PF.PRO_Codigo = FILHO.ENG_EstruturaItemProduto
+WHERE RTRIM(PAI.ENG_EstruturaItemProduto) = @produto
+  AND PAI.ENG_EstruturaNumero = (SELECT MAX(e2.ENG_EstruturaNumero) FROM ENG_ESTRUTURA AS e2
+                                 WHERE e2.ENG_EstruturaProduto = PAI.ENG_EstruturaProduto)
+  AND TRY_CAST(RTRIM(FILHO.ENG_EstruturaItemPosicao) AS INT) = TRY_CAST(@posicao AS INT)
 ```
+
 
 O programa que gera a etiqueta descarta os zeros à esquerda da posição (ex.: código de barras termina em `-78`, mas no ERP a posição fica gravada como `0078`) — por isso a comparação da posição é numérica (`TRY_CAST ... AS INT`) em vez de texto, pra "78" e "0078" baterem como o mesmo valor. `TRY_CAST` em vez de `CAST` evita que uma posição não-numérica derrube a consulta inteira — nesse caso simplesmente não bate, como esperado.
 

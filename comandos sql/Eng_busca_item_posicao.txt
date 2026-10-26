@@ -1,0 +1,45 @@
+-- Busca de item pelo código lido com posição (Novo Carregamento / Nova Caixa)
+-- Usado em backend/routes/itensMateriais.js (SELECT_POR_POSICAO).
+--
+-- Dois casos para códigos "projeto-ESTRUTURA-posição":
+--  1) a posição é o próprio número da estrutura (ex.: 250614-EPE010-10, estrutura EPE010):
+--     descarta a posição e busca como código sem posição:
+--       SELECT PRO_Codigo, PRO_Descricao FROM PRO_PRODUTO WHERE RTRIM(PRO_Codigo) = '250614-EPE010'
+--  2) a posição NÃO é o número da estrutura (ex.: 265545-DTV001-463): usa o SQL abaixo.
+--     Colunas que interessam: Produto_Pai (265545-DTV001), Posicao_Filho (463), Descricao_Filho.
+
+SELECT
+    PAI.ENG_EstruturaProduto          AS Estrutura,
+    PAI.ENG_EstruturaNumero           AS Versao_Pai,
+    PAI.ENG_EstruturaItemPosicao      AS Posicao_Pai,
+    PAI.ENG_EstruturaItemProduto      AS Produto_Pai,
+    PP.PRO_Descricao                  AS Descricao_Pai,
+    PAI.ENG_EstruturaItemQuantidade   AS Qtd_Pai,
+    FILHO.ENG_EstruturaNumero         AS Versao_Filho,
+    FILHO.ENG_EstruturaItemPosicao    AS Posicao_Filho,
+    FILHO.ENG_EstruturaItemProduto    AS Produto_Filho,
+    PF.PRO_Descricao                  AS Descricao_Filho,
+    FILHO.ENG_EstruturaItemTipo       AS Tipo_Filho,
+    FILHO.ENG_EstruturaItemDimUnd     AS Und_Filho,
+    FILHO.ENG_EstruturaItemDimPecas   AS Pecas_Filho,
+    FILHO.ENG_EstruturaItemQuantidade AS Qtd_Filho_Unit,
+    FILHO.ENG_EstruturaItemQuantidade * PAI.ENG_EstruturaItemQuantidade AS Qtd_Filho_Total
+FROM [dbo].[ENG_ESTRUTURAITEM] PAI
+INNER JOIN [dbo].[ENG_ESTRUTURAITEM] FILHO
+    ON FILHO.ENG_EstruturaProduto = PAI.ENG_EstruturaItemProduto
+   AND FILHO.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM [dbo].[ENG_ESTRUTURA] e2
+        WHERE e2.ENG_EstruturaProduto = FILHO.ENG_EstruturaProduto
+   )
+INNER JOIN [dbo].[PRO_PRODUTO] PF
+    ON PF.PRO_Codigo = FILHO.ENG_EstruturaItemProduto
+LEFT JOIN [dbo].[PRO_PRODUTO] PP
+    ON PP.PRO_Codigo = PAI.ENG_EstruturaItemProduto
+WHERE PAI.ENG_EstruturaItemProduto LIKE '265545-DTV001%'
+  AND PAI.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM [dbo].[ENG_ESTRUTURA] e2
+        WHERE e2.ENG_EstruturaProduto = PAI.ENG_EstruturaProduto
+   )
+  AND TRY_CAST(RTRIM(FILHO.ENG_EstruturaItemPosicao) AS INT) = 463;   -- posição lida

@@ -32,32 +32,65 @@ const SELECT_BASE = `
 // reforma não é sempre "01", só o tamanho é sempre 8 dígitos no total).
 const PADRAO_CODIGO_COM_POSICAO = /^(\d{6}(?:\d{2})?-[A-Za-z]{3}\d+)-(\d+)$/;
 
-// SELECT do item de estrutura pela ordem de produção (ORD_ORDEM) +
-// posição (ORD_ORDEMPRVITEM), trazendo a descrição do produto em
-// PRO_PRODUTO — fornecido pelo usuário. RTRIM nas colunas de junção
-// pelo mesmo motivo do SELECT_BASE (CHAR de tamanho fixo no ERP).
+// SELECT do item de estrutura pela ENGENHARIA (ENG_ESTRUTURAITEM) — caso 2
+// abaixo. O código lido "250614-DTV001-463" vira produto "250614-DTV001"
+// (o PAI, um subconjunto da estrutura) e posição 463; o item procurado é o
+// FILHO desse pai que está na posição 463, na maior revisão (ENG_EstruturaNumero)
+// do pai e do filho. Vêm daí Produto_Pai, Posicao_Filho e a descrição do
+// filho (Descricao_Filho). Comando original em
+// "comandos sql/Eng_busca_item_posicao.txt".
 //
-// A posição sai impressa no código de barras SEM os zeros à esquerda
-// (o programa que gera a etiqueta os descarta), mas no ERP ela fica
-// gravada com zeros à esquerda (ex.: código de barras "...-78", ERP
-// "0078") — comparar como texto (RTRIM = @posicao) não bate. Por isso
-// a comparação da posição é numérica (TRY_CAST ... AS INT), que trata
-// "78" e "0078" como o mesmo valor. TRY_CAST em vez de CAST porque,
-// se algum registro tiver posição não-numérica, vira NULL em vez de
-// dar erro na consulta inteira — só não bate, como esperado.
+// A posição sai impressa no código de barras SEM os zeros à esquerda (o
+// programa que gera a etiqueta os descarta), mas no ERP ela fica gravada com
+// zeros à esquerda (ex.: código de barras "...-78", ERP "0078") — por isso a
+// comparação da posição é numérica (TRY_CAST ... AS INT), que trata "78" e
+// "0078" como o mesmo valor. TRY_CAST em vez de CAST: posição não-numérica
+// vira NULL (só não bate) em vez de derrubar a consulta inteira.
 const SELECT_POR_POSICAO = `
   SELECT TOP 1
-    RTRIM(oo.ORD_OrdemNumero)         AS codigo,
-    RTRIM(pp.PRO_Descricao)           AS descricao,
-    oi.ORD_OrdemPrvItemQuantidade     AS quantidade
-  FROM ORD_ORDEM AS oo
-  JOIN ORD_ORDEMPRVITEM AS oi
-    ON oi.ORD_OrdemSequencia = oo.ORD_OrdemSequencia
-  JOIN PRO_PRODUTO AS pp
-    ON pp.PRO_Codigo = oi.ORD_OrdemPrvItemProduto
-  WHERE RTRIM(oo.ORD_OrdemProduto) = @produto
-    AND TRY_CAST(RTRIM(oi.ORD_OrdemPrvItemPosicao) AS INT) = TRY_CAST(@posicao AS INT)
+    RTRIM(FILHO.ENG_EstruturaItemProduto)  AS codigo,
+    RTRIM(PF.PRO_Descricao)                AS descricao,
+    FILHO.ENG_EstruturaItemQuantidade * PAI.ENG_EstruturaItemQuantidade AS quantidade
+  FROM ENG_ESTRUTURAITEM AS PAI
+  INNER JOIN ENG_ESTRUTURAITEM AS FILHO
+    ON FILHO.ENG_EstruturaProduto = PAI.ENG_EstruturaItemProduto
+   AND FILHO.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM ENG_ESTRUTURA AS e2
+        WHERE e2.ENG_EstruturaProduto = FILHO.ENG_EstruturaProduto
+   )
+  INNER JOIN PRO_PRODUTO AS PF
+    ON PF.PRO_Codigo = FILHO.ENG_EstruturaItemProduto
+  WHERE RTRIM(PAI.ENG_EstruturaItemProduto) = @produto
+    AND PAI.ENG_EstruturaNumero = (
+        SELECT MAX(e2.ENG_EstruturaNumero)
+        FROM ENG_ESTRUTURA AS e2
+        WHERE e2.ENG_EstruturaProduto = PAI.ENG_EstruturaProduto
+   )
+    AND TRY_CAST(RTRIM(FILHO.ENG_EstruturaItemPosicao) AS INT) = TRY_CAST(@posicao AS INT)
 `;
+
+// Busca direta por PRO_Codigo (código "sem posição").
+const SELECT_POR_CODIGO = `
+  SELECT TOP 1
+    RTRIM(PRO_Codigo)    AS codigo,
+    RTRIM(PRO_Descricao) AS descricao,
+    PRO_PesoLiquido       AS quantidade
+  FROM PRO_PRODUTO
+  WHERE RTRIM(PRO_Codigo) = @codigo
+`;
+
+// Dois casos de código com posição ("projeto-ESTRUTURA-posição"):
+//  1) a "posição" é o próprio número da estrutura (ex.: 250614-EPE010-10:
+//     estrutura EPE010 → 010 = 10): a etiqueta é do item "250614-EPE010"
+//     em si, então descarta a posição e busca como código sem posição;
+//  2) a posição NÃO é o número da estrutura (ex.: 265545-DTV001-463, e a
+//     estrutura é DTV001 = 1): é a posição de um item dentro da estrutura,
+//     busca na engenharia (SELECT_POR_POSICAO).
+function posicaoEhDaEstrutura(produto, posicao) {
+  const numeroEstrutura = /-[A-Za-z]{3}(\d+)$/.exec(produto);
+  return !!numeroEstrutura && parseInt(numeroEstrutura[1], 10) === parseInt(posicao, 10);
+}
 
 // GET /api/itens-materiais — usado pelo painel admin (somente consulta).
 // ?busca=texto filtra por código ou descrição (contém). Sem busca, traz
@@ -91,8 +124,9 @@ router.get('/', auth, apenasAdmin, async (req, res) => {
 // qualquer perfil autenticado pode consultar (não é exclusivo do admin).
 // Se o código bater com o padrão projeto-estrutura-posição (etiqueta
 // de item de estrutura de engenharia, ver PADRAO_CODIGO_COM_POSICAO),
-// busca via ORD_ORDEM/ORD_ORDEMPRVITEM; caso contrário, busca direto
-// por PRO_Codigo como sempre.
+// busca na engenharia (ENG_ESTRUTURAITEM pai/filho) pela posição — ou, se a
+// posição for o próprio número da estrutura, direto por PRO_Codigo sem ela
+// (ver posicaoEhDaEstrutura); caso contrário, busca por PRO_Codigo como sempre.
 router.get('/codigo/:codigo', auth, async (req, res) => {
   try {
     const codigo = req.params.codigo.trim();
@@ -101,21 +135,17 @@ router.get('/codigo/:codigo', auth, async (req, res) => {
 
     const comPosicao = PADRAO_CODIGO_COM_POSICAO.exec(codigo);
     let result;
-    if (comPosicao) {
+    if (comPosicao && !posicaoEhDaEstrutura(comPosicao[1], comPosicao[2])) {
+      // Caso 2: posição de um item dentro da estrutura (engenharia).
       const [, produto, posicao] = comPosicao;
       request.input('produto', sql.NVarChar, produto);
       request.input('posicao', sql.NVarChar, posicao);
       result = await request.query(SELECT_POR_POSICAO);
     } else {
-      request.input('codigo', sql.NVarChar, codigo);
-      result = await request.query(
-        `SELECT TOP 1
-           RTRIM(PRO_Codigo)    AS codigo,
-           RTRIM(PRO_Descricao) AS descricao,
-           PRO_PesoLiquido       AS quantidade
-         FROM PRO_PRODUTO
-         WHERE RTRIM(PRO_Codigo) = @codigo`
-      );
+      // Sem posição, ou caso 1 (posição = número da estrutura): busca por
+      // PRO_Codigo, sem a posição.
+      request.input('codigo', sql.NVarChar, comPosicao ? comPosicao[1] : codigo);
+      result = await request.query(SELECT_POR_CODIGO);
     }
 
     const item = result.recordset[0];
