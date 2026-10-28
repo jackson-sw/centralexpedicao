@@ -1726,6 +1726,12 @@ function renderFooterCaixaDetalhe(c) {
       botoes += `<button class="btn btn-out" id="btn-reimprimir-${c.id}" onclick="reimprimirEtiquetaCaixa(${c.id})">🖨️ Reimprimir</button>`;
     }
     botoes += `<button class="btn btn-blue" id="btn-romaneio-${c.id}" onclick="gerarRomaneio(${c.id})">🧾 Romaneio</button>`;
+    // Reabrir caixa fechada para corrigir erros de digitação — só
+    // Almoxarifado e só caixas montadas pelo Almoxarifado; expedida não
+    // reabre (ver POST /caixas/:id/reabrir).
+    if (podeCorrigirCaixa() && c.status === 'fechada' && c.criado_por_perfil === 'almoxarifado') {
+      botoes += `<button class="btn btn-out" id="btn-reabrir-${c.id}" onclick="reabrirCaixa(${c.id})">🔓 Reabrir</button>`;
+    }
     // Botão "Reimprimir Desenhos" DESATIVADO (a pedido do usuário) —
     // no perfil Produção agora só se imprime o romaneio. Comentado em
     // vez de removido, caso precise reativar no futuro.
@@ -2251,6 +2257,26 @@ async function finalizarCaixa(id) {
     carregarCaixas(idListaCaixasAtual());
   } catch (e) {
     toast(e.message, true);
+  }
+}
+
+// ── REABRIR CAIXA (Almoxarifado) ───────────────────────
+// Volta a caixa para "aberta" e já abre a tela de Alterar, onde o
+// Almoxarifado edita/exclui itens e troca o equipamento. Ao finalizar
+// de novo, o código de barras gerado é o mesmo (CX + id) — a etiqueta
+// já colada continua valendo.
+async function reabrirCaixa(id) {
+  if (!confirm('Reabrir esta caixa para correção? Ela só poderá ser expedida depois de finalizada de novo.')) return;
+  const btn = document.getElementById(`btn-reabrir-${id}`);
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api('POST', `${apiBaseCaixaAtual()}/${id}/reabrir`, {});
+    toast(data.mensagem);
+    carregarCaixas(idListaCaixasAtual());
+    await abrirAlterarCaixa(id);
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) btn.disabled = false;
   }
 }
 

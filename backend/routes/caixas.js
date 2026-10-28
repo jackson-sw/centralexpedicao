@@ -382,6 +382,44 @@ router.delete('/:caixaId/itens/:itemId', auth, apenasAlmoxarifado, async (req, r
   }
 });
 
+// POST /api/caixas/:id/reabrir — volta uma caixa "fechada" para
+// "aberta" para corrigir erros de digitação (a pedido do usuário). Só
+// o perfil Almoxarifado e só caixas montadas pelo próprio Almoxarifado
+// (criado_por_perfil). Caixa "expedida" não reabre: já foi lida num
+// carregamento (remova-a do carregamento antes, o que a devolve para
+// "fechada"). Limpa codigo_barras/fechado_em para a caixa não ser
+// aceita pelo scanner do carregamento enquanto estiver aberta — ao
+// finalizar de novo, o código gerado é o mesmo (CX + id), então a
+// etiqueta já colada continua valendo.
+router.post('/:id/reabrir', auth, apenasAlmoxarifado, async (req, res) => {
+  try {
+    const [[caixa]] = await db.query('SELECT id, status, criado_por_perfil FROM caixas WHERE id = ?', [req.params.id]);
+    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    if (caixa.criado_por_perfil !== 'almoxarifado') {
+      return res.status(403).json({ erro: 'Só caixas montadas pelo Almoxarifado podem ser reabertas.' });
+    }
+    if (caixa.status === 'aberta') {
+      return res.status(409).json({ erro: 'Esta caixa já está aberta.' });
+    }
+    if (caixa.status !== 'fechada') {
+      return res.status(409).json({ erro: 'Caixa já expedida num carregamento não pode ser reaberta.' });
+    }
+
+    const [result] = await db.query(
+      `UPDATE caixas SET status = 'aberta', fechado_em = NULL, codigo_barras = NULL WHERE id = ? AND status = 'fechada'`,
+      [caixa.id]
+    );
+    if (!result.affectedRows) {
+      return res.status(409).json({ erro: 'A caixa mudou de situação. Atualize a tela e tente de novo.' });
+    }
+
+    res.json({ id: caixa.id, status: 'aberta', mensagem: 'Caixa reaberta. Corrija os itens e finalize de novo.' });
+  } catch (err) {
+    console.error('[POST /caixas/:id/reabrir]', err.message);
+    res.status(500).json({ erro: 'Erro ao reabrir caixa.' });
+  }
+});
+
 // POST /api/caixas/:id/finalizar — fecha a caixa: grava a data/hora
 // de fechamento e gera o código de barras (pronto para etiqueta).
 router.post('/:id/finalizar', auth, apenasMontagemCaixa, async (req, res) => {
