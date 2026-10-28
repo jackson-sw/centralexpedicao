@@ -696,6 +696,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
         </select>
       </div>
 
+      <div id="alt-equipamento-bloco"></div>
+
       <div id="alt-itens-existentes"></div>
 
       <div class="mat-head">
@@ -1960,23 +1962,152 @@ async function abrirAlterarCaixa(id) {
     preencherOpcoesResponsavel('alt-responsavel');
     document.getElementById('alt-responsavel').disabled = false;
     document.getElementById('btn-cancelar-alterar').textContent = 'Cancelar';
-    document.getElementById('alt-itens-existentes').innerHTML = `
-      <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${c.itens.length})</label></div>
-      ${c.itens.map(i => `
-        <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;gap:8px">
-            <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
-            <span class="cc-itens-count">${i.quantidade}x</span>
-          </div>
-          <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">👤 ${escapeHtml(i.responsavel_nome || '—')}</div>
-        </div>
-      `).join('')}
-    `;
+    itensExistentesAlterar = c.itens.map(i => ({ ...i, salvo: true }));
+    renderEquipamentoAlterar(c.equipamento);
+    renderItensExistentesAlterar();
     novosItensAlterar = [{ codigo_item: '', descricao: '', quantidade: 1 }];
     renderItensAlterar();
     fecharModal('mo-caixa-detalhe');
     abrirModal('mo-caixa-alterar');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// Almoxarifado pode corrigir a caixa enquanto ela estiver aberta (a
+// pedido do usuário — muitos erros de quantidade/item/estrutura na
+// montagem): trocar o equipamento (estrutura, ex.: TAV, EPE) e editar
+// ou excluir os itens já salvos. Os demais perfis continuam só vendo
+// os itens existentes e adicionando novos. Rotas: PUT /caixas/:id,
+// PUT e DELETE /caixas/:id/itens/:itemId.
+let itensExistentesAlterar = [];
+
+function podeCorrigirCaixa() {
+  return PERFIL === 'almoxarifado';
+}
+
+function renderEquipamentoAlterar(equipamento) {
+  const el = document.getElementById('alt-equipamento-bloco');
+  if (!podeCorrigirCaixa()) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="fg">
+      <label>Equipamento (estrutura) *</label>
+      <div class="mat-cod-row">
+        <input id="alt-equipamento" maxlength="8" value="${escapeAttr(equipamento || '')}" placeholder="Obrigatório">
+        <button type="button" class="btn btn-out" id="btn-salvar-equipamento" onclick="salvarEquipamentoAlterar()">Salvar</button>
+      </div>
+    </div>
+  `;
+}
+
+async function salvarEquipamentoAlterar() {
+  const input = document.getElementById('alt-equipamento');
+  const equipamento = input.value.trim();
+  if (!equipamento) {
+    toast('Informe o equipamento da caixa.', true);
+    input.focus();
+    return;
+  }
+  const btn = document.getElementById('btn-salvar-equipamento');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const data = await api('PUT', `${apiBaseCaixaAtual()}/${alterandoCaixaId}`, { equipamento });
+    input.value = data.equipamento;
+    document.getElementById('btn-cancelar-alterar').textContent = 'Fechar';
+    toast('Equipamento atualizado.');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
+  }
+}
+
+function renderItensExistentesAlterar() {
+  const itens = itensExistentesAlterar;
+  const editavel = podeCorrigirCaixa();
+  document.getElementById('alt-itens-existentes').innerHTML = `
+    <div class="fg" style="margin-bottom:8px"><label>Itens já cadastrados (${itens.length})</label></div>
+    ${itens.map((i, idx) => editavel ? `
+      <div class="mat-row" style="padding:10px 14px;margin-bottom:6px">
+        <div class="mat-row-top">
+          <span class="mat-row-num">👤 ${escapeHtml(i.responsavel_nome || '—')}</span>
+          <button type="button" class="mat-remove" style="color:#dc2626" onclick="excluirItemExistenteAlterar(${idx})" title="Excluir item">✕</button>
+        </div>
+        <div class="fg" style="margin-bottom:8px">
+          <label>Código do item *</label>
+          <input value="${escapeAttr(i.codigo_item)}" oninput="atualizaItemExistenteAlterar(${idx},'codigo_item',this.value)">
+        </div>
+        <div class="mat-fr">
+          <div class="fg" style="margin-bottom:0">
+            <label>Descrição *</label>
+            <input value="${escapeAttr(i.descricao)}" oninput="atualizaItemExistenteAlterar(${idx},'descricao',this.value)">
+          </div>
+          <div class="fg" style="margin-bottom:0">
+            <label>Quantidade *</label>
+            <input type="number" min="0" step="1" value="${i.quantidade}" oninput="atualizaItemExistenteAlterar(${idx},'quantidade',this.value)">
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button type="button" class="btn ${i.salvo ? 'btn-out' : 'btn-blue'}" id="btn-salvar-existente-${idx}" onclick="salvarItemExistenteAlterar(${idx})">${i.salvo ? '✅ Salvo' : '✓ Salvar alteração'}</button>
+        </div>
+      </div>
+    ` : `
+      <div class="mat-row" style="cursor:default;padding:10px 14px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="font-family:monospace;font-size:12.5px;font-weight:700">${escapeHtml(i.codigo_item)}</span>
+          <span class="cc-itens-count">${i.quantidade}x</span>
+        </div>
+        <div class="cf-v" style="font-size:12.5px;font-weight:400">${escapeHtml(i.descricao)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">👤 ${escapeHtml(i.responsavel_nome || '—')}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function atualizaItemExistenteAlterar(idx, campo, valor) {
+  const it = itensExistentesAlterar[idx];
+  it[campo] = valor;
+  if (it.salvo) {
+    it.salvo = false;
+    const btn = document.getElementById(`btn-salvar-existente-${idx}`);
+    if (btn) { btn.textContent = '✓ Salvar alteração'; btn.classList.remove('btn-out'); btn.classList.add('btn-blue'); }
+  }
+}
+
+async function salvarItemExistenteAlterar(idx) {
+  const it = itensExistentesAlterar[idx];
+  const codigo_item = (it.codigo_item || '').trim();
+  const descricao = (it.descricao || '').trim();
+  const quantidade = parseFloat(it.quantidade) || 0;
+  if (!codigo_item || !descricao || !quantidade) {
+    toast('Preencha código, descrição e quantidade antes de salvar.', true);
+    return false;
+  }
+  const btn = document.getElementById(`btn-salvar-existente-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    await api('PUT', `${apiBaseCaixaAtual()}/${alterandoCaixaId}/itens/${it.id}`, { codigo_item, descricao, quantidade });
+    Object.assign(it, { codigo_item, descricao, quantidade, salvo: true });
+    renderItensExistentesAlterar();
+    document.getElementById('btn-cancelar-alterar').textContent = 'Fechar';
+    toast('Item atualizado.');
+    return true;
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Salvar alteração'; }
+    return false;
+  }
+}
+
+async function excluirItemExistenteAlterar(idx) {
+  const it = itensExistentesAlterar[idx];
+  if (!confirm(`Excluir o item ${it.codigo_item} da caixa? Essa ação não pode ser desfeita.`)) return;
+  try {
+    await api('DELETE', `${apiBaseCaixaAtual()}/${alterandoCaixaId}/itens/${it.id}`);
+    itensExistentesAlterar.splice(idx, 1);
+    renderItensExistentesAlterar();
+    document.getElementById('btn-cancelar-alterar').textContent = 'Fechar';
+    toast('Item excluído.');
   } catch (e) {
     toast(e.message, true);
   }

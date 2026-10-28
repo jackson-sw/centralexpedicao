@@ -321,6 +321,67 @@ router.put('/:caixaId/itens/:itemId', auth, apenasMontagemCaixa, async (req, res
   }
 });
 
+// Correções numa caixa ainda aberta (trocar o equipamento/estrutura e
+// excluir item salvo errado) — só o perfil Almoxarifado, a pedido do
+// usuário (muitos erros de digitação/leitura na montagem). A edição de
+// código/descrição/quantidade de um item já usa o PUT acima.
+function apenasAlmoxarifado(req, res, next) {
+  if (req.usuario?.perfil !== 'almoxarifado') {
+    return res.status(403).json({ erro: 'Acesso restrito ao perfil Almoxarifado.' });
+  }
+  next();
+}
+
+// PUT /api/caixas/:id — altera o equipamento (estrutura, ex.: TAV, EPE)
+// informado na abertura. Só enquanto a caixa estiver aberta. Mesmas
+// regras do POST / (obrigatório, até 8 caracteres).
+router.put('/:id', auth, apenasAlmoxarifado, async (req, res) => {
+  try {
+    const equipamentoLimpo = String(req.body.equipamento || '').trim();
+    if (!equipamentoLimpo) {
+      return res.status(400).json({ erro: 'Informe o equipamento da caixa.' });
+    }
+    if (equipamentoLimpo.length > 8) {
+      return res.status(400).json({ erro: 'O equipamento aceita no máximo 8 caracteres.' });
+    }
+
+    const [[caixa]] = await db.query('SELECT id, status FROM caixas WHERE id = ?', [req.params.id]);
+    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    if (caixa.status !== 'aberta') {
+      return res.status(409).json({ erro: 'Esta caixa já foi finalizada e não aceita alterações.' });
+    }
+
+    await db.query('UPDATE caixas SET equipamento = ? WHERE id = ?', [equipamentoLimpo, caixa.id]);
+    res.json({ id: caixa.id, equipamento: equipamentoLimpo, mensagem: 'Equipamento atualizado.' });
+  } catch (err) {
+    console.error('[PUT /caixas/:id]', err.message);
+    res.status(500).json({ erro: 'Erro ao atualizar a caixa.' });
+  }
+});
+
+// DELETE /api/caixas/:caixaId/itens/:itemId — exclui um item já salvo
+// de uma caixa aberta (ex.: item lido errado).
+router.delete('/:caixaId/itens/:itemId', auth, apenasAlmoxarifado, async (req, res) => {
+  try {
+    const [[caixa]] = await db.query('SELECT id, status FROM caixas WHERE id = ?', [req.params.caixaId]);
+    if (!caixa) return res.status(404).json({ erro: 'Caixa não encontrada.' });
+    if (caixa.status !== 'aberta') {
+      return res.status(409).json({ erro: 'Esta caixa já foi finalizada e não aceita alterações.' });
+    }
+
+    const [result] = await db.query(
+      'DELETE FROM caixa_itens WHERE id = ? AND caixa_id = ?',
+      [req.params.itemId, caixa.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ erro: 'Item não pertence a esta caixa.' });
+
+    res.json({ id: Number(req.params.itemId), mensagem: 'Item excluído.' });
+  } catch (err) {
+    console.error('[DELETE /caixas/:caixaId/itens/:itemId]', err.message);
+    res.status(500).json({ erro: 'Erro ao excluir item.' });
+  }
+});
+
 // POST /api/caixas/:id/finalizar — fecha a caixa: grava a data/hora
 // de fechamento e gera o código de barras (pronto para etiqueta).
 router.post('/:id/finalizar', auth, apenasMontagemCaixa, async (req, res) => {
