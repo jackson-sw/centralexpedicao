@@ -2893,7 +2893,11 @@ async function abrirScanner(tipo, idx) {
           return { width: largura, height: Math.floor(Math.min(largura * 0.4, h * 0.8)) };
         },
         // resolução maior + foco contínuo (câmera traseira)
+        // Com videoConstraints informado, a biblioteca ignora o facingMode
+        // do 1º parâmetro do start() — por isso a câmera traseira é pedida
+        // aqui dentro também (senão abre a frontal).
         videoConstraints: {
+          facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           advanced: [{ focusMode: 'continuous' }],
