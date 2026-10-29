@@ -2872,16 +2872,33 @@ async function abrirScanner(tipo, idx) {
   scannerContext = { tipo, idx };
   abrirModal('mo-scanner');
   try {
-    scannerAtivo = new Html5Qrcode('scanner-viewport');
-    const formatsSupported = [
-      Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.QR_CODE,
-    ];
+    // Só os formatos usados nas etiquetas (Code 128 e Code 39): EAN/UPC/QR
+    // são só numéricos/outros e causavam leituras erradas de códigos
+    // alfanuméricos como "250614-EPE010-10".
+    scannerAtivo = new Html5Qrcode('scanner-viewport', {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+      ],
+      // leitor nativo do Chrome/Android (bem mais preciso), quando existir
+      useBarCodeDetectorIfSupported: true,
+      verbose: false,
+    });
     await scannerAtivo.start(
       { facingMode: 'environment' },
-      { fps: 12, qrbox: { width: 260, height: 140 }, formatsToSupport: formatsSupported },
+      {
+        fps: 15,
+        // área de leitura larga e baixa (retângulo), própria de código de barras
+        qrbox: (w, h) => {
+          const largura = Math.floor(Math.min(w * 0.92, 420));
+          return { width: largura, height: Math.floor(Math.min(largura * 0.4, h * 0.8)) };
+        },
+        // resolução maior + foco contínuo (câmera traseira)
+        videoConstraints: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          advanced: [{ focusMode: 'continuous' }],
+        },
+      },
       (decodedText) => {
         const ctx = scannerContext;
         fecharScanner();
